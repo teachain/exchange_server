@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/viabtc/go-project/services/readhistory/internal/reader"
 	"github.com/viabtc/go-project/services/readhistory/internal/server"
+	"github.com/viabtc/go-project/services/readhistory/internal/server/handler"
 )
 
 func getDBPassword() string {
@@ -28,8 +30,7 @@ func main() {
 	viper.SetConfigFile(*configPath)
 	viper.SetConfigType("yaml")
 	if err := viper.ReadInConfig(); err != nil {
-		fmt.Println("load config failed:", err.Error())
-		os.Exit(1)
+		log.Fatal("load config failed:", err.Error())
 	}
 
 	host := viper.GetString("server.host")
@@ -43,12 +44,16 @@ func main() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", dbUser, dbPass, dbHost, dbPort, dbName)
 	db, err := sqlx.Connect("mysql", dsn)
 	if err != nil {
-		fmt.Println("connect database failed:", err.Error())
-		os.Exit(1)
+		log.Fatal("failed to connect db:", err)
 	}
+	defer db.Close()
 
 	r := reader.New(db)
 	srv := server.New(r)
+
+	handler.RegisterBalanceHandlers(srv)
+	handler.RegisterOrderHandlers(srv)
+	handler.RegisterMarketHandlers(srv)
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
@@ -58,5 +63,8 @@ func main() {
 	}()
 
 	addr := fmt.Sprintf("%s:%d", host, port)
-	srv.Start(addr)
+	log.Println("Starting RPC server on", addr)
+	if err := srv.Start(addr); err != nil {
+		log.Fatal("server failed:", err)
+	}
 }
