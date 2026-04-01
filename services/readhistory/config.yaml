@@ -1,0 +1,14 @@
+server:
+  host: "127.0.0.1"
+  port: 7424
+
+database:
+  host: "127.0.0.1"
+  port: 3306
+  name: "trade_history"
+  username: "root"
+  password: ""
+  max_open: 100
+  max_idle: 50
+
+workers: 10

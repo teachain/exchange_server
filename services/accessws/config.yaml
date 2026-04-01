@@ -1,0 +1,10 @@
+server:
+  socket: "/tmp/accessws.sock"
+
+kafka:
+  brokers:
+    - "127.0.0.1:9092"
+  consumer:
+    deals: "deals"
+    orders: "orders"
+    balances: "balances"
