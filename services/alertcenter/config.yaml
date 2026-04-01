@@ -1,5 +1,5 @@
 server:
-  host: "127.0.0.1"
+  host: "0.0.0.0"
   port: 4444
 
 redis:
@@ -10,3 +10,7 @@ redis:
   sentinel:
     enabled: true
     master: "mymaster"
+    addrs:
+      - "127.0.0.1:26379"
+      - "127.0.0.1:26380"
+      - "127.0.0.1:26381"
