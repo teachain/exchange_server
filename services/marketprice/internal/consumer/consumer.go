@@ -24,7 +24,7 @@ type DealConsumer struct {
 	redis    *redis.Client
 }
 
-func NewDealConsumer(brokers []string, group string, handler func(*Deal), redisAddr string) (*DealConsumer, error) {
+func NewDealConsumer(brokers []string, group string, handler func(*Deal), redisAddr string, redisPassword string) (*DealConsumer, error) {
 	config := sarama.NewConfig()
 	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{
 		sarama.NewBalanceStrategyRoundRobin(),
@@ -36,7 +36,8 @@ func NewDealConsumer(brokers []string, group string, handler func(*Deal), redisA
 	}
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr: redisAddr,
+		Addr:     redisAddr,
+		Password: redisPassword,
 	})
 
 	return &DealConsumer{
@@ -63,7 +64,7 @@ func (c *DealConsumer) SaveOffset(offset int64) error {
 	return c.redis.Set(ctx, "k:offset", offset, 0).Err()
 }
 
-func (c *DealConsumer) Start(topic string) error {
+func (c *DealConsumer) Start(topic string, partition int32) error {
 	offset, err := c.GetLastOffset()
 	if err != nil {
 		return err
@@ -73,7 +74,7 @@ func (c *DealConsumer) Start(topic string) error {
 		offset = sarama.OffsetNewest
 	}
 
-	partitionConsumer, err := c.consumer.ConsumePartition(topic, 0, offset)
+	partitionConsumer, err := c.consumer.ConsumePartition(topic, partition, offset)
 	if err != nil {
 		return err
 	}

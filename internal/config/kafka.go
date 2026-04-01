@@ -7,9 +7,10 @@ type KafkaConfig struct {
 }
 
 type KafkaConsumerConfig struct {
-	Group  string `mapstructure:"group"`
-	Topic  string `mapstructure:"topic"`
-	Offset string `mapstructure:"offset"`
+	Group     string `mapstructure:"group"`
+	Topic     string `mapstructure:"topic"`
+	Offset    string `mapstructure:"offset"`
+	Partition int32  `mapstructure:"partition"`
 }
 
 type KafkaProducerConfig struct {

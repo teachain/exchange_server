@@ -27,6 +27,10 @@ func New() *Server {
 	}
 }
 
+func (s *Server) GetMarketManager() *market.Manager {
+	return s.marketMgr
+}
+
 func (s *Server) Start(addr string) error {
 	s.setupRoutes()
 	return s.router.Run(addr)
@@ -301,7 +305,7 @@ func (s *Server) calculateMarketSummary(info *model.MarketInfo) gin.H {
 	}
 }
 
-func (s *Server) StartConsumer(brokers []string, group string, topic string, redisAddr string) {
+func (s *Server) StartConsumer(brokers []string, group string, topic string, redisAddr string, redisPassword string, partition int32) {
 	dealConsumer, err := consumer.NewDealConsumer(brokers, group, func(deal *consumer.Deal) {
 		price, _ := decimal.NewFromString(deal.Price)
 		amount, _ := decimal.NewFromString(deal.Amount)
@@ -313,13 +317,13 @@ func (s *Server) StartConsumer(brokers []string, group string, topic string, red
 			Amount: amount,
 			Side:   deal.Side,
 		})
-	}, redisAddr)
+	}, redisAddr, redisPassword)
 
 	if err != nil {
 		panic("create deal consumer failed: " + err.Error())
 	}
 
-	if err := dealConsumer.Start(topic); err != nil {
+	if err := dealConsumer.Start(topic, partition); err != nil {
 		panic("start deal consumer failed: " + err.Error())
 	}
 }
