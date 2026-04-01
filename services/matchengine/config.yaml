@@ -27,3 +27,20 @@ kafka:
     group: "matchengine"
     topic: "deals"
     offset: "newest"
+
+markets:
+  - name: "BTC_USDT"
+    stock: "BTC"
+    money: "USDT"
+    stock_prec: 8
+    money_prec: 2
+    fee_prec: 8
+    min_amount: "0.0001"
+
+assets:
+  - name: "BTC"
+    prec: 8
+    prec_show: 8
+  - name: "USDT"
+    prec: 8
+    prec_show: 2

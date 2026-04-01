@@ -32,6 +32,18 @@ func (h *Handler) HandleJSONRPC(c *gin.Context) {
 		return
 	}
 
+	if req.ID == nil {
+		c.JSON(http.StatusOK, model.JSONRPCResponse{
+			JSONRPC: "2.0",
+			Error: &model.RPCError{
+				Code:    -32600,
+				Message: "Invalid Request",
+			},
+			ID: nil,
+		})
+		return
+	}
+
 	var resp interface{}
 	var err error
 

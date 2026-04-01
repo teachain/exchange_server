@@ -1,36 +1,37 @@
 package log
 
-import "github.com/teachain/deepseek/log"
+import "go.uber.org/zap"
 
-var logger = log.New()
+var logger *zap.Logger
 
 func Init(service string, level string) {
-	logger = log.New(
-		log.WithServiceName(service),
-		log.WithLevel(level),
-	)
+	config := zap.NewProductionConfig()
+	config.InitialFields = map[string]interface{}{
+		"service": service,
+	}
+	logger, _ = config.Build()
 }
 
-func Debug(msg string, fields ...log.Field) {
+func Debug(msg string, fields ...zap.Field) {
 	logger.Debug(msg, fields...)
 }
 
-func Info(msg string, fields ...log.Field) {
+func Info(msg string, fields ...zap.Field) {
 	logger.Info(msg, fields...)
 }
 
-func Warn(msg string, fields ...log.Field) {
+func Warn(msg string, fields ...zap.Field) {
 	logger.Warn(msg, fields...)
 }
 
-func Error(msg string, fields ...log.Field) {
+func Error(msg string, fields ...zap.Field) {
 	logger.Error(msg, fields...)
 }
 
-func Fatal(msg string, fields ...log.Field) {
+func Fatal(msg string, fields ...zap.Field) {
 	logger.Fatal(msg, fields...)
 }
 
-func WithField(key string, value interface{}) log.Field {
-	return log.WithField(key, value)
+func WithField(key string, value interface{}) zap.Field {
+	return zap.Any(key, value)
 }

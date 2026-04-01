@@ -1,17 +1,15 @@
-workspace("go-project")
-
-go 1.21
+go 1.25.0
 
 use (
-    ./internal/config
-    ./internal/log
-    ./internal/database
-    ./internal/redis
-    ./internal/kafka
-    ./services/matchengine
-    ./services/accesshttp
-    ./services/accessws
-    ./services/marketprice
-    ./services/readhistory
-    ./services/alertcenter
+	./internal/config
+	./internal/database
+	./internal/kafka
+	./internal/log
+	./internal/redis
+	./services/accesshttp
+	./services/accessws
+	./services/alertcenter
+	./services/marketprice
+	./services/matchengine
+	./services/readhistory
 )
