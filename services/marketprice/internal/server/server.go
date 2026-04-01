@@ -14,14 +14,14 @@ import (
 )
 
 type Server struct {
-	router    *gin.Engine
+	Router    *gin.Engine
 	km        *kline.KlineManager
 	marketMgr *market.Manager
 }
 
 func New() *Server {
 	return &Server{
-		router:    gin.Default(),
+		Router:    gin.Default(),
 		km:        kline.NewKlineManager(),
 		marketMgr: market.NewManager(),
 	}
@@ -31,21 +31,29 @@ func (s *Server) GetMarketManager() *market.Manager {
 	return s.marketMgr
 }
 
+func (s *Server) GetKlineManager() *kline.KlineManager {
+	return s.km
+}
+
 func (s *Server) Start(addr string) error {
-	s.setupRoutes()
-	return s.router.Run(addr)
+	s.SetupRoutes()
+	return s.Router.Run(addr)
+}
+
+func (s *Server) SetupRoutes() {
+	s.Router.GET("/kline/:market/:interval", s.handleGetKline)
+	s.Router.GET("/health", s.handleHealthCheck)
+	s.Router.GET("/status/:market", s.HandleMarketStatus)
+	s.Router.GET("/kline/:market", s.HandleMarketKline)
+	s.Router.GET("/deals/:market", s.HandleMarketDeals)
+	s.Router.GET("/last/:market", s.HandleMarketLast)
+	s.Router.GET("/status_today/:market", s.HandleMarketStatusToday)
+	s.Router.GET("/markets", s.HandleMarketList)
+	s.Router.GET("/summary/:market", s.HandleMarketSummary)
 }
 
 func (s *Server) setupRoutes() {
-	s.router.GET("/kline/:market/:interval", s.handleGetKline)
-	s.router.GET("/health", s.handleHealthCheck)
-	s.router.GET("/status/:market", s.HandleMarketStatus)
-	s.router.GET("/kline/:market", s.HandleMarketKline)
-	s.router.GET("/deals/:market", s.HandleMarketDeals)
-	s.router.GET("/last/:market", s.HandleMarketLast)
-	s.router.GET("/status_today/:market", s.HandleMarketStatusToday)
-	s.router.GET("/markets", s.HandleMarketList)
-	s.router.GET("/summary/:market", s.HandleMarketSummary)
+	s.SetupRoutes()
 }
 
 func (s *Server) handleGetKline(c *gin.Context) {
