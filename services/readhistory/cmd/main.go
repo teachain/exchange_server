@@ -10,6 +10,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/viper"
+	"github.com/viabtc/go-project/services/readhistory/internal/reader"
 	"github.com/viabtc/go-project/services/readhistory/internal/server"
 )
 
@@ -46,7 +47,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := server.New(host, port, db)
+	r := reader.New(db)
+	srv := server.New(r)
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
@@ -55,5 +57,6 @@ func main() {
 		os.Exit(0)
 	}()
 
-	srv.Start()
+	addr := fmt.Sprintf("%s:%d", host, port)
+	srv.Start(addr)
 }
