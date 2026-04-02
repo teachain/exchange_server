@@ -3,15 +3,13 @@ module github.com/viabtc/go-project/services/matchengine
 go 1.25.0
 
 require (
-	github.com/ZYunH/skiplist v0.0.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.7.1
-	github.com/golang/protobuf v1.5.3
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/segmentio/kafka-go v0.4.50
 	github.com/shopspring/decimal v1.3.1
 	github.com/spf13/viper v1.18.2
-	google.golang.org/grpc v1.59.0
+	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
 )
 
@@ -59,6 +57,7 @@ require (
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120221211-b8f7ae30c516 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
