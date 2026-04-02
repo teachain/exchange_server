@@ -46,6 +46,7 @@ type Engine struct {
 	assets      map[string]*model.AssetConfig
 	producer    Producer
 	orderTrades map[uint64][]*Trade
+	stopMgr     *StopManager
 }
 
 func NewEngine() *Engine {
@@ -58,6 +59,7 @@ func NewEngine() *Engine {
 		markets:     make(map[string]*model.MarketConfig),
 		assets:      make(map[string]*model.AssetConfig),
 		orderTrades: make(map[uint64][]*Trade),
+		stopMgr:     NewStopManager(),
 	}
 	e.LoadConfig()
 	return e
@@ -231,4 +233,70 @@ func (e *Engine) GetOrderTrades(orderID uint64, offset, limit int) ([]*Trade, in
 	}
 
 	return trades[offset:end], total
+}
+
+func (e *Engine) AddStopOrder(order *order.Order, triggerPrice decimal.Decimal) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	stopOrder := &StopOrder{
+		Order:        *order,
+		TriggerPrice: triggerPrice,
+		Triggered:    false,
+	}
+	e.stopMgr.AddStopOrder(stopOrder)
+}
+
+func (e *Engine) CancelStopOrder(market string, orderID uint64) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	return e.stopMgr.RemoveStopOrder(market, orderID)
+}
+
+func (e *Engine) GetStopOrders(market string) []*StopOrder {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	return e.stopMgr.GetStopOrders(market)
+}
+
+func (e *Engine) CheckAndTriggerStopOrders(market string, lastPrice decimal.Decimal) []order.Order {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	return e.stopMgr.CheckStopOrders(market, lastPrice)
+}
+
+func (e *Engine) ProcessTriggeredStopOrders(market string, lastPrice decimal.Decimal) ([]*Trade, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	triggeredOrders := e.stopMgr.CheckStopOrders(market, lastPrice)
+	if len(triggeredOrders) == 0 {
+		return nil, nil
+	}
+
+	var trades []*Trade
+	for i := range triggeredOrders {
+		o := &triggeredOrders[i]
+		ob := e.getOrCreateOrderBookLocked(o.Market)
+
+		o.ID = e.idGenerator.NextID()
+		o.Status = order.OrderStatusPending
+		o.CreateTime = time.Now()
+		o.UpdateTime = time.Now()
+
+		orderTrades, err := e.match(ob, o)
+		if err != nil {
+			continue
+		}
+		trades = append(trades, orderTrades...)
+	}
+
+	return trades, nil
+}
+
+func (e *Engine) GetStopManager() *StopManager {
+	return e.stopMgr
 }

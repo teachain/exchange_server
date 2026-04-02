@@ -107,3 +107,59 @@ func (w *OperLogWriter) flush(batch []*OperLog) error {
 	}
 	return nil
 }
+
+type OperLogHandler interface {
+	HandleOrderCreate(data []byte) error
+	HandleOrderDeal(data []byte) error
+	HandleOrderCancel(data []byte) error
+	HandleBalanceChange(data []byte) error
+}
+
+func (w *OperLogWriter) Replay(fromID int64, handler OperLogHandler) error {
+	query := "SELECT id, type, data, created_at FROM operlog WHERE id > ? ORDER BY id ASC LIMIT 10000"
+	rows, err := w.db.Queryx(query, fromID)
+	if err != nil {
+		return fmt.Errorf("query operlog failed: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var log OperLog
+		if err := rows.StructScan(&log); err != nil {
+			return fmt.Errorf("scan operlog failed: %w", err)
+		}
+
+		if err := w.processLog(&log, handler); err != nil {
+			stdlog.Printf("replay operlog %d failed: %v", log.ID, err)
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (w *OperLogWriter) processLog(log *OperLog, handler OperLogHandler) error {
+	data := []byte(log.Data)
+
+	switch log.Type {
+	case OperLogTypeOrderCreate:
+		return handler.HandleOrderCreate(data)
+	case OperLogTypeOrderDeal:
+		return handler.HandleOrderDeal(data)
+	case OperLogTypeOrderCancel:
+		return handler.HandleOrderCancel(data)
+	case OperLogTypeBalanceChange:
+		return handler.HandleBalanceChange(data)
+	default:
+		return fmt.Errorf("unknown operlog type: %d", log.Type)
+	}
+}
+
+func (w *OperLogWriter) GetLastLogID() (int64, error) {
+	var id int64
+	err := w.db.Get(&id, "SELECT MAX(id) FROM operlog")
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
