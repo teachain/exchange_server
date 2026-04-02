@@ -133,16 +133,16 @@ func (m *Manager) FlushDirty(cache *cache.RedisCache) {
 
 			switch key.KlineType {
 			case KlineTypeSec:
-				interval = "sec"
+				interval = "1s"
 				kline = info.SecKlines[key.Timestamp]
 			case KlineTypeMin:
-				interval = "min"
+				interval = "1m"
 				kline = info.MinKlines[key.Timestamp]
 			case KlineTypeHour:
-				interval = "hour"
+				interval = "1h"
 				kline = info.HourKlines[key.Timestamp]
 			case KlineTypeDay:
-				interval = "day"
+				interval = "1d"
 				kline = info.DayKlines[key.Timestamp]
 			}
 
