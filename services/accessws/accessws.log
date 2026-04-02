@@ -16,3 +16,4 @@
 2026/04/02 11:48:26 failed to read orders message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
 2026/04/02 11:48:41 failed to read balances message: fetching message: [15] Group Coordinator Not Available: the broker returns this error code for group coordinator requests, offset commits, and most group management requests if the offsets topic has not yet been created, or if the group coordinator is not active
 2026/04/02 11:48:41 failed to read orders message: fetching message: [15] Group Coordinator Not Available: the broker returns this error code for group coordinator requests, offset commits, and most group management requests if the offsets topic has not yet been created, or if the group coordinator is not active
+2026/04/02 14:30:23 shutting down...

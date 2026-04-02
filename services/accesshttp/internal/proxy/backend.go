@@ -28,12 +28,7 @@ func NewBackendProxy(cfg *config.Config) *BackendProxy {
 }
 
 func (p *BackendProxy) ForwardToMatchEngine(ctx context.Context, req *model.JSONRPCRequest) (interface{}, error) {
-	switch req.Method {
-	case "balance.query", "balance.update", "balance.history":
-		return nil, nil
-	default:
-		return p.forward(ctx, p.matchengine, req)
-	}
+	return p.forward(ctx, p.matchengine, req)
 }
 
 func (p *BackendProxy) ForwardToBalance(ctx context.Context, req *model.JSONRPCRequest) (interface{}, error) {
