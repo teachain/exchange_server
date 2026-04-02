@@ -1,12 +1,14 @@
 package server
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/viabtc/go-project/services/readhistory/internal/reader"
@@ -22,6 +24,7 @@ type Server struct {
 	reader       interface{}
 	mu           sync.RWMutex
 	router       *gin.Engine
+	timeout      time.Duration
 }
 
 func New(reader interface{}) *Server {
@@ -30,7 +33,20 @@ func New(reader interface{}) *Server {
 		httpHandlers: make(map[string]HTTPHandlerFunc),
 		reader:       reader,
 		router:       gin.Default(),
+		timeout:      30 * time.Second,
 	}
+}
+
+func timeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, _ := context.WithTimeout(c.Request.Context(), timeout)
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
+
+func (s *Server) SetTimeout(timeout time.Duration) {
+	s.timeout = timeout
 }
 
 func (s *Server) Start(addr string) error {
@@ -44,6 +60,7 @@ func (s *Server) Start(addr string) error {
 }
 
 func (s *Server) setupHTTPRoutes() {
+	s.router.Use(timeoutMiddleware(s.timeout))
 	s.router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
