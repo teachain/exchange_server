@@ -70,6 +70,11 @@ type RPCCLient struct {
 	timeout     time.Duration
 	lastReqID   uint64
 	reqIDMu     sync.Mutex
+
+	meClient  *Client
+	mpClient  *Client
+	rhClient  *Client
+	clientsMu sync.Mutex
 }
 
 func NewRPCClient(matchEngine, marketPrice, readHistory string, timeout time.Duration) *RPCCLient {
@@ -81,6 +86,72 @@ func NewRPCClient(matchEngine, marketPrice, readHistory string, timeout time.Dur
 	}
 }
 
+func (r *RPCCLient) getMatchEngineClient() (*Client, error) {
+	r.clientsMu.Lock()
+	defer r.clientsMu.Unlock()
+
+	if r.meClient != nil {
+		return r.meClient, nil
+	}
+
+	client, err := NewClient(r.matchEngine, r.timeout)
+	if err != nil {
+		return nil, err
+	}
+	r.meClient = client
+	return client, nil
+}
+
+func (r *RPCCLient) getMarketPriceClient() (*Client, error) {
+	r.clientsMu.Lock()
+	defer r.clientsMu.Unlock()
+
+	if r.mpClient != nil {
+		return r.mpClient, nil
+	}
+
+	client, err := NewClient(r.marketPrice, r.timeout)
+	if err != nil {
+		return nil, err
+	}
+	r.mpClient = client
+	return client, nil
+}
+
+func (r *RPCCLient) getReadHistoryClient() (*Client, error) {
+	r.clientsMu.Lock()
+	defer r.clientsMu.Unlock()
+
+	if r.rhClient != nil {
+		return r.rhClient, nil
+	}
+
+	client, err := NewClient(r.readHistory, r.timeout)
+	if err != nil {
+		return nil, err
+	}
+	r.rhClient = client
+	return client, nil
+}
+
+func (r *RPCCLient) Close() {
+	r.clientsMu.Lock()
+	defer r.clientsMu.Unlock()
+
+	if r.meClient != nil {
+		r.meClient.Close()
+		r.meClient = nil
+	}
+	if r.mpClient != nil {
+		r.mpClient.Close()
+		r.mpClient = nil
+	}
+	if r.rhClient != nil {
+		r.rhClient.Close()
+		r.rhClient = nil
+	}
+}
+
 func (r *RPCCLient) NextReqID() uint64 {
 	r.reqIDMu.Lock()
 	id := atomic.AddUint64(&r.lastReqID, 1)
@@ -89,29 +160,26 @@ func (r *RPCCLient) NextReqID() uint64 {
 }
 
 func (r *RPCCLient) QueryMatchEngine(cmd uint32, body []byte) (*Package, error) {
-	client, err := NewClient(r.matchEngine, r.timeout)
+	client, err := r.getMatchEngineClient()
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
 	return client.Send(cmd, r.NextReqID(), body)
 }
 
 func (r *RPCCLient) QueryMarketPrice(cmd uint32, body []byte) (*Package, error) {
-	client, err := NewClient(r.marketPrice, r.timeout)
+	client, err := r.getMarketPriceClient()
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
 	return client.Send(cmd, r.NextReqID(), body)
 }
 
 func (r *RPCCLient) QueryReadHistory(cmd uint32, body []byte) (*Package, error) {
-	client, err := NewClient(r.readHistory, r.timeout)
+	client, err := r.getReadHistoryClient()
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
 	return client.Send(cmd, r.NextReqID(), body)
 }
 
