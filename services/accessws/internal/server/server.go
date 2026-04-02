@@ -515,3 +515,7 @@ func (s *WSServer) SubMgr() *subscription.Manager {
 func (s *WSServer) RPCClient() *rpc.RPCCLient {
 	return s.rpcClient
 }
+
+func (s *WSServer) Stop() {
+	close(s.stopCh)
+}
