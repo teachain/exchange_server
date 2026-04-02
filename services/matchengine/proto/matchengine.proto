@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package matchengine;
+
+option go_package = "github.com/viabtc/go-project/services/matchengine/proto";
+
+service MatchEngine {
+    rpc PutLimitOrder(PutLimitOrderRequest) returns (PutOrderResponse);
+    rpc PutMarketOrder(PutMarketOrderRequest) returns (PutOrderResponse);
+    rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+    rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+    rpc GetOrderBook(GetOrderBookRequest) returns (GetOrderBookResponse);
+    rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+    rpc ListAsset(ListAssetRequest) returns (ListAssetResponse);
+    rpc CreateMarket(CreateMarketRequest) returns (CreateMarketResponse);
+    rpc CreateAsset(CreateAssetRequest) returns (CreateAssetResponse);
+}
+
+message PutLimitOrderRequest {
+    int32 user_id = 1;
+    string market = 2;
+    string side = 3;
+    string price = 4;
+    string amount = 5;
+    string fee = 6;
+}
+
+message PutMarketOrderRequest {
+    int32 user_id = 1;
+    string market = 2;
+    string side = 3;
+    string amount = 4;
+    string fee = 5;
+}
+
+message PutOrderResponse {
+    int32 code = 1;
+    string message = 2;
+    int64 order_id = 3;
+    string deal_amount = 4;
+    string deal_money = 5;
+}
+
+message CancelOrderRequest {
+    int32 user_id = 1;
+    int64 order_id = 2;
+}
+
+message CancelOrderResponse {
+    int32 code = 1;
+    string message = 2;
+}
+
+message GetOrderRequest {
+    int64 order_id = 1;
+}
+
+message GetOrderResponse {
+    int32 code = 1;
+    Order order = 2;
+}
+
+message Order {
+    int64 order_id = 1;
+    int32 user_id = 2;
+    string market = 3;
+    string side = 4;
+    string price = 5;
+    string amount = 6;
+    string deal = 7;
+    int64 ctime = 8;
+    int64 mtime = 9;
+    string status = 10;
+}
+
+message GetOrderBookRequest {
+    string market = 1;
+    int32 limit = 2;
+}
+
+message GetOrderBookResponse {
+    repeated OrderBookItem asks = 1;
+    repeated OrderBookItem bids = 2;
+}
+
+message OrderBookItem {
+    string price = 1;
+    string amount = 2;
+}
+
+message GetBalanceRequest {
+    int32 user_id = 1;
+    string asset = 2;
+}
+
+message GetBalanceResponse {
+    int32 code = 1;
+    string balance = 2;
+    string frozen = 3;
+}
+
+message ListAssetRequest {}
+
+message Asset {
+    string name = 1;
+    int32 prec = 2;
+}
+
+message ListAssetResponse {
+    repeated Asset assets = 1;
+}
+
+message CreateMarketRequest {
+    string market = 1;
+    string stock = 2;
+    string money = 3;
+    int32 price_precision = 4;
+    int32 amount_precision = 5;
+}
+
+message CreateMarketResponse {
+    int32 code = 1;
+    string message = 2;
+}
+
+message CreateAssetRequest {
+    string name = 1;
+    int32 prec = 2;
+}
+
+message CreateAssetResponse {
+    int32 code = 1;
+    string message = 2;
+}
