@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -372,4 +374,34 @@ func (e *Engine) AppendUserBalanceHistory(userID uint32, asset, business string,
 		available, _ := e.balances.GetBalance(userID, asset)
 		e.historyWriter.AppendUserBalanceHistory(userID, asset, business, change, available, detail)
 	}
+}
+
+func (e *Engine) LoadOrdersToEngine(orders map[string][]*order.Order) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	for market, marketOrders := range orders {
+		ob := e.getOrCreateOrderBookLocked(market)
+		for _, ord := range marketOrders {
+			if ord.IsActive() {
+				ob.PutOrder(ord)
+			}
+		}
+	}
+	return nil
+}
+
+func (e *Engine) LoadBalancesToEngine(balances map[string]*balance.Balance) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	for key, bal := range balances {
+		parts := strings.Split(key, ":")
+		if len(parts) != 2 {
+			continue
+		}
+		userID, _ := strconv.ParseUint(parts[0], 10, 32)
+		e.balances.SetBalance(uint32(userID), bal.Asset, bal.Available, bal.Frozen)
+	}
+	return nil
 }

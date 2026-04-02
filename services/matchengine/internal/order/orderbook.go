@@ -43,6 +43,10 @@ func (ob *OrderBook) Remove(orderID uint64) {
 	delete(ob.orders, orderID)
 }
 
+func (ob *OrderBook) PutOrder(o *Order) {
+	ob.Add(o)
+}
+
 func (ob *OrderBook) GetOrder(orderID uint64) (*Order, bool) {
 	ob.mu.RLock()
 	defer ob.mu.RUnlock()
