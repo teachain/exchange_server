@@ -3,10 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/spf13/viper"
 	"golang.org/x/sys/unix"
 
 	"github.com/viabtc/go-project/services/accesshttp/internal/config"
@@ -41,6 +43,18 @@ func main() {
 	setCoreLimit(1000000000)
 
 	srv := server.New(cfg)
+
+	monitorAddr := viper.GetString("monitor.bind")
+	if monitorAddr == "" {
+		monitorAddr = ":8081"
+	}
+	monitorServer := server.NewMonitorServer(monitorAddr)
+	go func() {
+		log.Printf("Monitor server listening on %s", monitorAddr)
+		if err := monitorServer.Start(); err != nil {
+			log.Printf("Monitor server error: %v", err)
+		}
+	}()
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)

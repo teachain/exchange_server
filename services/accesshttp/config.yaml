@@ -8,3 +8,6 @@ backend:
   matchengine: "127.0.0.1:7316"
   marketprice: "127.0.0.1:7416"
   readhistory: "127.0.0.1:7424"
+
+monitor:
+  bind: ":8081"
