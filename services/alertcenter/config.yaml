@@ -1,6 +1,13 @@
 server:
   host: "0.0.0.0"
   port: 4444
+  shutdown_timeout: 30
+
+log:
+  file: "alertcenter.log"
+  max_size: 104857600
+  max_backups: 7
+  max_age: 7
 
 redis:
   host: "127.0.0.1"
