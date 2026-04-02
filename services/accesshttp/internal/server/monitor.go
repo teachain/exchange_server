@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"runtime"
 	"time"
@@ -9,8 +10,9 @@ import (
 )
 
 type MonitorServer struct {
-	addr   string
-	router *gin.Engine
+	addr    string
+	router  *gin.Engine
+	httpSrv *http.Server
 }
 
 func NewMonitorServer(addr string) *MonitorServer {
@@ -56,5 +58,16 @@ func (m *MonitorServer) stats(c *gin.Context) {
 }
 
 func (m *MonitorServer) Start() error {
-	return http.ListenAndServe(m.addr, m.router)
+	m.httpSrv = &http.Server{
+		Addr:    m.addr,
+		Handler: m.router,
+	}
+	return m.httpSrv.ListenAndServe()
+}
+
+func (m *MonitorServer) Shutdown() error {
+	if m.httpSrv == nil {
+		return nil
+	}
+	return m.httpSrv.Shutdown(context.Background())
 }

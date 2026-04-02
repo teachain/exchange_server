@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/viabtc/go-project/services/accesshttp/internal/config"
@@ -11,6 +13,7 @@ import (
 
 type Server struct {
 	cfg     *config.Config
+	httpSrv *http.Server
 	router  *gin.Engine
 	handler *handler.Handler
 }
@@ -27,7 +30,18 @@ func New(cfg *config.Config) *Server {
 func (s *Server) Start() error {
 	s.setupRoutes()
 	addr := fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port)
-	return s.router.Run(addr)
+	s.httpSrv = &http.Server{
+		Addr:    addr,
+		Handler: s.router,
+	}
+	return s.httpSrv.ListenAndServe()
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s.httpSrv == nil {
+		return nil
+	}
+	return s.httpSrv.Shutdown(ctx)
 }
 
 func (s *Server) setupRoutes() {

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/spf13/viper"
 	"golang.org/x/sys/unix"
@@ -56,12 +58,32 @@ func main() {
 		}
 	}()
 
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
 	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		<-sigCh
-		os.Exit(0)
+		log.Printf("Server listening on %s:%d", cfg.Server.Host, cfg.Server.Port)
+		if err := srv.Start(); err != nil {
+			log.Printf("Server error: %v", err)
+		}
 	}()
 
-	srv.Start()
+	sig := <-sigCh
+	log.Printf("Received signal: %v", sig)
+	log.Println("Shutting down gracefully...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	time.Sleep(5 * time.Second)
+
+	if err := monitorServer.Shutdown(); err != nil {
+		log.Printf("Monitor shutdown error: %v", err)
+	}
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
+	}
+
+	log.Println("Shutdown complete")
 }
