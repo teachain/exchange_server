@@ -33,7 +33,13 @@ func (km *KlineManager) AddDeal(market string, price, amount decimal.Decimal, ts
 	km.mu.Lock()
 	defer km.mu.Unlock()
 
-	for _, interval := range []Interval{Interval1m, Interval5m, Interval15m, Interval1h, Interval4h, Interval1d} {
+	allIntervals := []Interval{
+		Interval1s, Interval1m, Interval5m, Interval15m, Interval30m,
+		Interval1h, Interval2h, Interval4h, Interval6h, Interval12h,
+		Interval1d, Interval1w, Interval1M,
+	}
+
+	for _, interval := range allIntervals {
 		tsBucket := interval.ToTimestamp(ts)
 
 		if km.current[market] == nil {
