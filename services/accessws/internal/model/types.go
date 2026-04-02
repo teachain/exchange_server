@@ -1,6 +1,9 @@
 package model
 
-import "github.com/gorilla/websocket"
+import (
+	"github.com/gorilla/websocket"
+	"sync"
+)
 
 type ClientSession struct {
 	ID      uint64
@@ -114,4 +117,72 @@ type TodayInfo struct {
 	Close  string `json:"close"`
 	Volume string `json:"volume"`
 	Last   string `json:"last"`
+}
+
+type DepthSnapshot struct {
+	Bids       map[string]string
+	Asks       map[string]string
+	LastUpdate int64
+}
+
+type DealRecord struct {
+	ID     int64   `json:"id"`
+	Time   float64 `json:"time"`
+	Type   string  `json:"type"`
+	Amount string  `json:"amount"`
+	Price  string  `json:"price"`
+}
+
+type DealsBuffer struct {
+	records []DealRecord
+	lastID  int64
+	maxSize int
+	mu      sync.Mutex
+}
+
+func NewDealsBuffer(maxSize int) *DealsBuffer {
+	return &DealsBuffer{
+		records: make([]DealRecord, 0, maxSize),
+		lastID:  0,
+		maxSize: maxSize,
+	}
+}
+
+func (b *DealsBuffer) Add(deal DealRecord) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if deal.ID <= b.lastID {
+		return
+	}
+	b.records = append(b.records, deal)
+	b.lastID = deal.ID
+	if len(b.records) > b.maxSize {
+		b.records = b.records[len(b.records)-b.maxSize:]
+	}
+}
+
+func (b *DealsBuffer) GetAll() []DealRecord {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	result := make([]DealRecord, len(b.records))
+	copy(result, b.records)
+	return result
+}
+
+func (b *DealsBuffer) GetSince(sinceID int64) []DealRecord {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var result []DealRecord
+	for _, d := range b.records {
+		if d.ID > sinceID {
+			result = append(result, d)
+		}
+	}
+	return result
+}
+
+func (b *DealsBuffer) GetLastID() int64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.lastID
 }
