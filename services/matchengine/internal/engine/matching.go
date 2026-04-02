@@ -178,6 +178,22 @@ func (e *Engine) settleTrade(trade *Trade) {
 	}
 }
 
+func (e *Engine) PutOrderNoLock(incoming *order.Order) ([]*Trade, error) {
+	ob := e.getOrCreateOrderBookLocked(incoming.Market)
+
+	trades, err := e.match(ob, incoming)
+	if err != nil {
+		return nil, err
+	}
+
+	if incoming.Left.IsPositive() && !incoming.IsFinished() {
+		incoming.Status = order.OrderStatusPartial
+		ob.Add(incoming)
+	}
+
+	return trades, nil
+}
+
 func (e *Engine) CancelOrder(orderID uint64, market string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
