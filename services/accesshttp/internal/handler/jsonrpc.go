@@ -63,8 +63,10 @@ func (h *Handler) HandleJSONRPC(c *gin.Context) {
 		resp, err = h.cfg.ForwardToReadHistory(c.Request.Context(), &req)
 
 	case "market.last", "market.deals", "market.kline",
-		"market.status", "market.status_today", "market.list", "market.summary":
+		"market.status", "market.status_today":
 		resp, err = h.cfg.ForwardToMarketPrice(c.Request.Context(), &req)
+	case "market.list", "market.summary":
+		resp, err = h.cfg.ForwardToMatchEngine(c.Request.Context(), &req)
 	case "market.user_deals":
 		resp, err = h.cfg.ForwardToReadHistory(c.Request.Context(), &req)
 
