@@ -12,48 +12,46 @@ import (
 )
 
 type BackendProxy struct {
-	matchengine string
-	marketprice string
-	readhistory string
-	httpClient  *http.Client
+	matchenginePool *Pool
+	marketpricePool *Pool
+	readhistoryPool *Pool
 }
 
 func NewBackendProxy(cfg *config.Config) *BackendProxy {
 	return &BackendProxy{
-		matchengine: "http://" + cfg.Backend.MatchEngine,
-		marketprice: "http://" + cfg.Backend.MarketPrice,
-		readhistory: "http://" + cfg.Backend.ReadHistory,
-		httpClient:  &http.Client{},
+		matchenginePool: NewPool("http://"+cfg.Backend.MatchEngine, 10),
+		marketpricePool: NewPool("http://"+cfg.Backend.MarketPrice, 10),
+		readhistoryPool: NewPool("http://"+cfg.Backend.ReadHistory, 10),
 	}
 }
 
 func (p *BackendProxy) ForwardToMatchEngine(ctx context.Context, req *model.JSONRPCRequest) (interface{}, error) {
-	return p.forward(ctx, p.matchengine, req)
+	return p.forward(ctx, p.matchenginePool, req)
 }
 
 func (p *BackendProxy) ForwardToBalance(ctx context.Context, req *model.JSONRPCRequest) (interface{}, error) {
 	switch req.Method {
 	case "balance.history":
-		return p.forwardJSON(ctx, p.readhistory+"/balance_history", req)
+		return p.forwardJSON(ctx, p.readhistoryPool, "/balance_history", req)
 	case "balance.query":
 		return p.queryBalance(ctx, req)
 	case "balance.update":
-		return p.forward(ctx, p.matchengine, req)
+		return p.forward(ctx, p.matchenginePool, req)
 	default:
-		return p.forward(ctx, p.matchengine, req)
+		return p.forward(ctx, p.matchenginePool, req)
 	}
 }
 
-func (p *BackendProxy) forwardJSON(ctx context.Context, url string, req *model.JSONRPCRequest) (interface{}, error) {
+func (p *BackendProxy) forwardJSON(ctx context.Context, pool *Pool, path string, req *model.JSONRPCRequest) (interface{}, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
 
-	httpReq, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	httpReq, _ := http.NewRequestWithContext(ctx, "POST", pool.backend+path, bytes.NewReader(body))
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	resp, err := pool.GetClient().Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -89,10 +87,10 @@ func (p *BackendProxy) queryBalance(ctx context.Context, req *model.JSONRPCReque
 		return nil, &model.RPCError{Code: -32602, Message: "Invalid asset"}
 	}
 
-	url := fmt.Sprintf("%s/balance/%d/%s", p.matchengine, int(userID), asset)
+	url := fmt.Sprintf("%s/balance/%d/%s", p.matchenginePool.backend, int(userID), asset)
 	httpReq, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
 
-	resp, err := p.httpClient.Do(httpReq)
+	resp, err := p.matchenginePool.GetClient().Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -117,18 +115,18 @@ func (p *BackendProxy) queryBalance(ctx context.Context, req *model.JSONRPCReque
 func (p *BackendProxy) ForwardToAsset(ctx context.Context, req *model.JSONRPCRequest) (interface{}, error) {
 	switch req.Method {
 	case "asset.list":
-		return p.forwardGet(ctx, p.matchengine+"/asset/list", req)
+		return p.forwardGet(ctx, p.matchenginePool, "/asset/list", req)
 	case "asset.summary":
-		return p.forwardGet(ctx, p.matchengine+"/asset/summary", req)
+		return p.forwardGet(ctx, p.matchenginePool, "/asset/summary", req)
 	default:
-		return p.forward(ctx, p.matchengine, req)
+		return p.forward(ctx, p.matchenginePool, req)
 	}
 }
 
 func (p *BackendProxy) ForwardToMarketPrice(ctx context.Context, req *model.JSONRPCRequest) (interface{}, error) {
 	switch req.Method {
 	case "market.list":
-		return p.forwardGet(ctx, p.marketprice+"/markets", req)
+		return p.forwardGet(ctx, p.marketpricePool, "/markets", req)
 	case "market.summary":
 		var params []string
 		if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -138,16 +136,16 @@ func (p *BackendProxy) ForwardToMarketPrice(ctx context.Context, req *model.JSON
 		if len(params) > 0 {
 			market = params[0]
 		}
-		return p.forwardGet(ctx, p.marketprice+"/summary/"+market, req)
+		return p.forwardGet(ctx, p.marketpricePool, "/summary/"+market, req)
 	default:
-		return p.forward(ctx, p.marketprice, req)
+		return p.forward(ctx, p.marketpricePool, req)
 	}
 }
 
-func (p *BackendProxy) forwardGet(ctx context.Context, url string, req *model.JSONRPCRequest) (interface{}, error) {
-	httpReq, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+func (p *BackendProxy) forwardGet(ctx context.Context, pool *Pool, path string, req *model.JSONRPCRequest) (interface{}, error) {
+	httpReq, _ := http.NewRequestWithContext(ctx, "GET", pool.backend+path, nil)
 
-	resp, err := p.httpClient.Do(httpReq)
+	resp, err := pool.GetClient().Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -162,19 +160,19 @@ func (p *BackendProxy) forwardGet(ctx context.Context, url string, req *model.JS
 }
 
 func (p *BackendProxy) ForwardToReadHistory(ctx context.Context, req *model.JSONRPCRequest) (interface{}, error) {
-	return p.forward(ctx, p.readhistory, req)
+	return p.forward(ctx, p.readhistoryPool, req)
 }
 
-func (p *BackendProxy) forward(ctx context.Context, backend string, req *model.JSONRPCRequest) (interface{}, error) {
+func (p *BackendProxy) forward(ctx context.Context, pool *Pool, req *model.JSONRPCRequest) (interface{}, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
 
-	httpReq, _ := http.NewRequestWithContext(ctx, "POST", backend, bytes.NewReader(body))
+	httpReq, _ := http.NewRequestWithContext(ctx, "POST", pool.backend, bytes.NewReader(body))
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := p.httpClient.Do(httpReq)
+	resp, err := pool.GetClient().Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -190,4 +188,10 @@ func (p *BackendProxy) forward(ctx context.Context, backend string, req *model.J
 	}
 
 	return rpcResp.Result, nil
+}
+
+func (p *BackendProxy) Close() {
+	p.matchenginePool.Close()
+	p.marketpricePool.Close()
+	p.readhistoryPool.Close()
 }
