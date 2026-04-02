@@ -412,14 +412,56 @@ func (s *WSServer) pollKline() {
 
 func (s *WSServer) pollDeals() {
 	for market := range s.subMgr.GetAllDealsSubs() {
-		body := rpc.BuildDealsQueryBody(market, 50, 0)
+		buf := s.subMgr.GetDealsBuffer(market)
+		lastID := buf.GetLastID()
+
+		body := rpc.BuildDealsQueryBody(market, 100, lastID)
 		resp, err := s.rpcClient.QueryMarketPrice(rpc.CMD_MARKET_DEALS, body)
 		if err != nil {
 			continue
 		}
 
+		var deals []struct {
+			ID     int64   `json:"id"`
+			Time   float64 `json:"time"`
+			Type   string  `json:"type"`
+			Amount string  `json:"amount"`
+			Price  string  `json:"price"`
+		}
+		json.Unmarshal(resp.Body, &deals)
+
+		if len(deals) == 0 {
+			continue
+		}
+
+		for _, d := range deals {
+			buf.Add(model.DealRecord{
+				ID:     d.ID,
+				Time:   d.Time,
+				Type:   d.Type,
+				Amount: d.Amount,
+				Price:  d.Price,
+			})
+		}
+
 		subs := s.subMgr.GetDealsSubscribers(market)
-		handler.BroadcastToSessions(subs, "deals.update", json.RawMessage(resp.Body))
+
+		newDeals := make([]map[string]interface{}, 0, len(deals))
+		for _, d := range deals {
+			if d.ID > lastID {
+				newDeals = append(newDeals, map[string]interface{}{
+					"id":     d.ID,
+					"time":   d.Time,
+					"type":   d.Type,
+					"amount": d.Amount,
+					"price":  d.Price,
+				})
+			}
+		}
+
+		if len(newDeals) > 0 {
+			handler.BroadcastToSessions(subs, "deals.update", newDeals)
+		}
 	}
 }
 

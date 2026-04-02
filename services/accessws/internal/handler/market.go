@@ -124,6 +124,7 @@ type DealsSubMgr interface {
 	DealsSubscribe(*model.ClientSession, string)
 	DealsUnsubscribe(*model.ClientSession)
 	GetDealsSubscribers(string) []*model.ClientSession
+	GetDealsBuffer(market string) *model.DealsBuffer
 }
 
 func NewDealsHandler(rpcClient *rpc.RPCCLient, subMgr DealsSubMgr) *DealsHandler {
@@ -167,6 +168,22 @@ func (h *DealsHandler) HandleDealsSubscribe(sess *model.ClientSession, id interf
 		return model.NewErrorResponse(id, model.ERR_INVALID_PARAMS, "need market")
 	}
 	market, _ := params[0].(string)
+
+	buf := h.subMgr.GetDealsBuffer(market)
+	records := buf.GetAll()
+
+	result := make([]map[string]interface{}, 0, len(records))
+	for _, deal := range records {
+		result = append(result, map[string]interface{}{
+			"id":     deal.ID,
+			"time":   deal.Time,
+			"type":   deal.Type,
+			"amount": deal.Amount,
+			"price":  deal.Price,
+		})
+	}
+	SendNotify(sess.Conn, "deals.update", result)
+
 	h.subMgr.DealsSubscribe(sess, market)
 	return model.NewSuccessResponse(id, true)
 }
