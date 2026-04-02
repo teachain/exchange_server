@@ -12,6 +12,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/shopspring/decimal"
 	"github.com/spf13/viper"
+	"github.com/viabtc/go-project/services/matchengine/internal/cli"
 	"github.com/viabtc/go-project/services/matchengine/internal/engine"
 	"github.com/viabtc/go-project/services/matchengine/internal/history"
 	"github.com/viabtc/go-project/services/matchengine/internal/persist"
@@ -87,10 +88,21 @@ func main() {
 	port := viper.GetInt("server.port")
 	addr := fmt.Sprintf("%s:%d", host, port)
 
+	cliHost := viper.GetString("cli.host")
+	cliPort := viper.GetInt("cli.port")
+	cliAddr := fmt.Sprintf("%s:%d", cliHost, cliPort)
+	cliServer := cli.NewCLI(cliAddr, e)
+	if err := cliServer.Start(); err != nil {
+		fmt.Printf("start CLI server failed: %v\n", err)
+	} else {
+		fmt.Printf("CLI server listening on %s\n", cliAddr)
+	}
+
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
+		cliServer.Stop()
 		os.Exit(0)
 	}()
 
