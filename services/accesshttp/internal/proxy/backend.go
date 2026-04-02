@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/viabtc/go-project/services/accesshttp/internal/config"
 	"github.com/viabtc/go-project/services/accesshttp/internal/model"
@@ -15,6 +17,7 @@ type BackendProxy struct {
 	matchenginePool *Pool
 	marketpricePool *Pool
 	readhistoryPool *Pool
+	timeout         time.Duration
 }
 
 func NewBackendProxy(cfg *config.Config) *BackendProxy {
@@ -22,7 +25,12 @@ func NewBackendProxy(cfg *config.Config) *BackendProxy {
 		matchenginePool: NewPool("http://"+cfg.Backend.MatchEngine, 10),
 		marketpricePool: NewPool("http://"+cfg.Backend.MarketPrice, 10),
 		readhistoryPool: NewPool("http://"+cfg.Backend.ReadHistory, 10),
+		timeout:         cfg.Timeout,
 	}
+}
+
+func (p *BackendProxy) GetTimeout() time.Duration {
+	return p.timeout
 }
 
 func (p *BackendProxy) ForwardToMatchEngine(ctx context.Context, req *model.JSONRPCRequest) (interface{}, error) {
@@ -53,6 +61,12 @@ func (p *BackendProxy) forwardJSON(ctx context.Context, pool *Pool, path string,
 
 	resp, err := pool.GetClient().Do(httpReq)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, &model.RPCError{
+				Code:    -32001,
+				Message: "Gateway timeout",
+			}
+		}
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -92,6 +106,12 @@ func (p *BackendProxy) queryBalance(ctx context.Context, req *model.JSONRPCReque
 
 	resp, err := p.matchenginePool.GetClient().Do(httpReq)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, &model.RPCError{
+				Code:    -32001,
+				Message: "Gateway timeout",
+			}
+		}
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -147,6 +167,12 @@ func (p *BackendProxy) forwardGet(ctx context.Context, pool *Pool, path string, 
 
 	resp, err := pool.GetClient().Do(httpReq)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, &model.RPCError{
+				Code:    -32001,
+				Message: "Gateway timeout",
+			}
+		}
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -174,6 +200,12 @@ func (p *BackendProxy) forward(ctx context.Context, pool *Pool, req *model.JSONR
 
 	resp, err := pool.GetClient().Do(httpReq)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, &model.RPCError{
+				Code:    -32001,
+				Message: "Gateway timeout",
+			}
+		}
 		return nil, err
 	}
 	defer resp.Body.Close()

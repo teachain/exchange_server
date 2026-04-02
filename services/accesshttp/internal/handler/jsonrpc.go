@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -44,31 +45,34 @@ func (h *Handler) HandleJSONRPC(c *gin.Context) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(c.Request.Context(), h.cfg.GetTimeout())
+	defer cancel()
+
 	var resp interface{}
 	var err error
 
 	switch req.Method {
 	case "asset.list", "asset.summary":
-		resp, err = h.cfg.ForwardToAsset(c.Request.Context(), &req)
+		resp, err = h.cfg.ForwardToAsset(ctx, &req)
 
 	case "balance.query", "balance.update":
-		resp, err = h.cfg.ForwardToBalance(c.Request.Context(), &req)
+		resp, err = h.cfg.ForwardToBalance(ctx, &req)
 	case "balance.history":
-		resp, err = h.cfg.ForwardToBalance(c.Request.Context(), &req)
+		resp, err = h.cfg.ForwardToBalance(ctx, &req)
 
 	case "order.put_limit", "order.put_market", "order.cancel",
 		"order.book", "order.depth", "order.pending", "order.pending_detail":
-		resp, err = h.cfg.ForwardToMatchEngine(c.Request.Context(), &req)
+		resp, err = h.cfg.ForwardToMatchEngine(ctx, &req)
 	case "order.deals", "order.finished", "order.finished_detail":
-		resp, err = h.cfg.ForwardToReadHistory(c.Request.Context(), &req)
+		resp, err = h.cfg.ForwardToReadHistory(ctx, &req)
 
 	case "market.last", "market.deals", "market.kline",
 		"market.status", "market.status_today":
-		resp, err = h.cfg.ForwardToMarketPrice(c.Request.Context(), &req)
+		resp, err = h.cfg.ForwardToMarketPrice(ctx, &req)
 	case "market.list", "market.summary":
-		resp, err = h.cfg.ForwardToMatchEngine(c.Request.Context(), &req)
+		resp, err = h.cfg.ForwardToMatchEngine(ctx, &req)
 	case "market.user_deals":
-		resp, err = h.cfg.ForwardToReadHistory(c.Request.Context(), &req)
+		resp, err = h.cfg.ForwardToReadHistory(ctx, &req)
 
 	default:
 		err = &model.RPCError{Code: -32601, Message: "Method not found"}
