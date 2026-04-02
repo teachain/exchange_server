@@ -33,7 +33,7 @@ func NewDealConsumer(brokers []string, group string, handler func(*Deal), redisA
 		MinBytes:       10e3,
 		MaxBytes:       10e6,
 		MaxWait:        1 * time.Second,
-		StartOffset:    kafka.LastOffset,
+		StartOffset:    kafka.FirstOffset,
 		CommitInterval: time.Second,
 	})
 
@@ -67,7 +67,33 @@ func (c *DealConsumer) SaveOffset(offset int64) error {
 }
 
 func (c *DealConsumer) Start(topic string, partition int32) error {
+	lastOffset, err := c.GetLastOffset()
+	if err != nil {
+		log.Printf("get last offset failed: %v", err)
+	}
+
 	go func() {
+		if lastOffset >= 0 {
+			for {
+				msg, err := c.reader.ReadMessage(context.Background())
+				if err != nil {
+					log.Printf("skip message error: %v", err)
+					break
+				}
+				if msg.Offset < lastOffset {
+					continue
+				}
+				var deal Deal
+				if err := json.Unmarshal(msg.Value, &deal); err != nil {
+					log.Printf("unmarshal deal failed: %v", err)
+					continue
+				}
+				c.handler(&deal)
+				c.SaveOffset(msg.Offset + 1)
+				break
+			}
+		}
+
 		for {
 			msg, err := c.reader.ReadMessage(context.Background())
 			if err != nil {

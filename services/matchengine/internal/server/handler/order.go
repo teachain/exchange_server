@@ -325,6 +325,7 @@ func HandleOrderPutMarket(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, erro
 		UserID:     uint32(userID),
 		Market:     market,
 		Side:       side,
+		Type:       order.OrderTypeMarket,
 		Price:      marketPrice,
 		Amount:     amount,
 		Left:       amount,

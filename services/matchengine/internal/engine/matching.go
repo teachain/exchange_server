@@ -74,14 +74,18 @@ func (e *Engine) match(ob *order.OrderBook, incoming *order.Order) ([]*Trade, er
 func (e *Engine) matchAsTaker(incoming *order.Order, makerQueue *order.PriceQueue, ob *order.OrderBook) []*Trade {
 	var trades []*Trade
 
+	isMarketOrder := incoming.Type == order.OrderTypeMarket
+
 	for makerQueue.Len() > 0 && incoming.Left.IsPositive() {
 		maker := makerQueue.Orders[0]
 
-		if incoming.Side == order.SideBid && maker.Price.GreaterThan(incoming.Price) {
-			break
-		}
-		if incoming.Side == order.SideAsk && maker.Price.LessThan(incoming.Price) {
-			break
+		if !isMarketOrder {
+			if incoming.Side == order.SideBid && maker.Price.GreaterThan(incoming.Price) {
+				break
+			}
+			if incoming.Side == order.SideAsk && maker.Price.LessThan(incoming.Price) {
+				break
+			}
 		}
 
 		remainingAmount := incoming.Left

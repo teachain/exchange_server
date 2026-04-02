@@ -1,6 +1,7 @@
 package persist
 
 import (
+	"bufio"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 type SliceManager struct {
 	db            *sql.DB
+	persister     Persister
 	sliceInterval time.Duration
 	sliceKeepTime time.Duration
 	sliceDir      string
@@ -27,9 +29,10 @@ type sliceInfo struct {
 	Path      string    `json:"path"`
 }
 
-func NewSliceManager(db *sql.DB, sliceInterval, sliceKeepTime time.Duration, sliceDir string) *SliceManager {
+func NewSliceManager(db *sql.DB, persister Persister, sliceInterval, sliceKeepTime time.Duration, sliceDir string) *SliceManager {
 	return &SliceManager{
 		db:            db,
+		persister:     persister,
 		sliceInterval: sliceInterval,
 		sliceKeepTime: sliceKeepTime,
 		sliceDir:      sliceDir,
@@ -79,11 +82,13 @@ func (sm *SliceManager) MakeSlice() error {
 	ordersPath := filepath.Join(slicePath, "orders")
 	balancesPath := filepath.Join(slicePath, "balances")
 
-	if err := sm.DumpOrdersToFile(ordersPath); err != nil {
+	orders := sm.persister.GetAllOrders()
+	if err := sm.DumpOrdersToFile(ordersPath, orders); err != nil {
 		return fmt.Errorf("failed to dump orders: %w", err)
 	}
 
-	if err := sm.DumpBalancesToFile(balancesPath); err != nil {
+	balances := sm.persister.GetAllBalances()
+	if err := sm.DumpBalancesToFile(balancesPath, balances); err != nil {
 		return fmt.Errorf("failed to dump balances: %w", err)
 	}
 
@@ -100,21 +105,53 @@ func (sm *SliceManager) MakeSlice() error {
 	return nil
 }
 
-func (sm *SliceManager) DumpOrdersToFile(path string) error {
+func (sm *SliceManager) DumpOrdersToFile(path string, orders map[string][]*order.Order) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create orders file: %w", err)
 	}
 	defer file.Close()
+
+	enc := json.NewEncoder(file)
+	for market, marketOrders := range orders {
+		for _, ord := range marketOrders {
+			data, err := sm.SerializeOrder(ord)
+			if err != nil {
+				continue
+			}
+			record := map[string]interface{}{
+				"market": market,
+				"order":  string(data),
+			}
+			if err := enc.Encode(record); err != nil {
+				continue
+			}
+		}
+	}
 	return nil
 }
 
-func (sm *SliceManager) DumpBalancesToFile(path string) error {
+func (sm *SliceManager) DumpBalancesToFile(path string, balances map[string]*balance.Balance) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create balances file: %w", err)
 	}
 	defer file.Close()
+
+	enc := json.NewEncoder(file)
+	for key, bal := range balances {
+		data, err := sm.SerializeBalance(bal)
+		if err != nil {
+			continue
+		}
+		record := map[string]interface{}{
+			"key":     key,
+			"balance": string(data),
+		}
+		if err := enc.Encode(record); err != nil {
+			continue
+		}
+	}
 	return nil
 }
 
@@ -166,23 +203,88 @@ func (sm *SliceManager) LoadFromSlice() error {
 	ordersPath := filepath.Join(si.Path, "orders")
 	balancesPath := filepath.Join(si.Path, "balances")
 
-	if err := sm.LoadOrdersFromFile(ordersPath); err != nil {
+	orders, err := sm.LoadOrdersFromFile(ordersPath)
+	if err != nil {
 		return fmt.Errorf("failed to load orders: %w", err)
 	}
 
-	if err := sm.LoadBalancesFromFile(balancesPath); err != nil {
+	balances, err := sm.LoadBalancesFromFile(balancesPath)
+	if err != nil {
 		return fmt.Errorf("failed to load balances: %w", err)
 	}
 
+	_ = orders
+	_ = balances
+
 	return nil
 }
 
-func (sm *SliceManager) LoadOrdersFromFile(path string) error {
-	return nil
+func (sm *SliceManager) LoadOrdersFromFile(path string) (map[string][]*order.Order, error) {
+	result := make(map[string][]*order.Order)
+
+	file, err := os.Open(path)
+	if err != nil {
+		return result, nil
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var record struct {
+			Market string `json:"market"`
+			Order  string `json:"order"`
+		}
+		if err := json.Unmarshal(line, &record); err != nil {
+			continue
+		}
+
+		ord, err := sm.DeserializeOrder([]byte(record.Order))
+		if err != nil {
+			continue
+		}
+		result[record.Market] = append(result[record.Market], ord)
+	}
+
+	return result, nil
 }
 
-func (sm *SliceManager) LoadBalancesFromFile(path string) error {
-	return nil
+func (sm *SliceManager) LoadBalancesFromFile(path string) (map[string]*balance.Balance, error) {
+	result := make(map[string]*balance.Balance)
+
+	file, err := os.Open(path)
+	if err != nil {
+		return result, nil
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var record struct {
+			Key     string `json:"key"`
+			Balance string `json:"balance"`
+		}
+		if err := json.Unmarshal(line, &record); err != nil {
+			continue
+		}
+
+		bal, err := sm.DeserializeBalance([]byte(record.Balance))
+		if err != nil {
+			continue
+		}
+		result[record.Key] = bal
+	}
+
+	return result, nil
 }
 
 type orderData struct {
