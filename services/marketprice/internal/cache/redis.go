@@ -211,3 +211,87 @@ func splitString(s string, sep string) []string {
 	result = append(result, s[start:])
 	return result
 }
+
+type CleanupConfig struct {
+	SecMaxAge  time.Duration
+	MinMaxAge  time.Duration
+	HourMaxAge time.Duration
+	DayMaxAge  time.Duration
+}
+
+func (c *RedisCache) StartPeriodicCleanup(cfg CleanupConfig) {
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		for range ticker.C {
+			c.cleanupOldKlines(cfg)
+		}
+	}()
+}
+
+func (c *RedisCache) cleanupOldKlines(cfg CleanupConfig) {
+	now := time.Now().Unix()
+
+	secCutoff := now - int64(cfg.SecMaxAge.Seconds())
+	c.cleanupInterval("1s", secCutoff)
+
+	minCutoff := now - int64(cfg.MinMaxAge.Seconds())
+	c.cleanupInterval("1m", minCutoff)
+
+	hourCutoff := now - int64(cfg.HourMaxAge.Seconds())
+	c.cleanupInterval("1h", hourCutoff)
+
+	if cfg.DayMaxAge > 0 {
+		dayCutoff := now - int64(cfg.DayMaxAge.Seconds())
+		c.cleanupInterval("1d", dayCutoff)
+	}
+}
+
+func (c *RedisCache) cleanupInterval(interval string, cutoff int64) {
+	ctx := context.Background()
+	markets := c.getAllMarkets(ctx)
+
+	for _, market := range markets {
+		key := fmt.Sprintf("k:%s:%s", market, interval)
+		fields, err := c.client.HGetAll(ctx, key).Result()
+		if err != nil {
+			continue
+		}
+
+		for field := range fields {
+			timestamp, err := strconv.ParseInt(field, 10, 64)
+			if err != nil {
+				continue
+			}
+			if timestamp < cutoff {
+				c.client.HDel(ctx, key, field)
+			}
+		}
+	}
+}
+
+func (c *RedisCache) getAllMarkets(ctx context.Context) []string {
+	pattern := "k:*:1m"
+	keys, err := c.client.Keys(ctx, pattern).Result()
+	if err != nil {
+		return nil
+	}
+
+	markets := make(map[string]bool)
+	for _, key := range keys {
+		parts := splitString(key, ":")
+		if len(parts) >= 2 {
+			markets[parts[1]] = true
+		}
+	}
+
+	result := make([]string, 0, len(markets))
+	for market := range markets {
+		result = append(result, market)
+	}
+	return result
+}
+
+func (c *RedisCache) TrimDealsList(market string, maxSize int64) error {
+	key := fmt.Sprintf("k:%s:deals", market)
+	return c.client.LTrim(c.ctx, key, 0, maxSize-1).Err()
+}
