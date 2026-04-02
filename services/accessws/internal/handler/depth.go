@@ -7,8 +7,10 @@ import (
 )
 
 type DepthHandler struct {
-	rpcClient *rpc.RPCCLient
-	subMgr    DepthSubMgr
+	rpcClient  *rpc.RPCCLient
+	subMgr     DepthSubMgr
+	depthLimit []int
+	depthMerge []string
 }
 
 type DepthSubMgr interface {
@@ -19,8 +21,57 @@ type DepthSubMgr interface {
 	SetDepthSnapshot(string, *model.DepthSnapshot)
 }
 
-func NewDepthHandler(rpcClient *rpc.RPCCLient, subMgr DepthSubMgr) *DepthHandler {
-	return &DepthHandler{rpcClient: rpcClient, subMgr: subMgr}
+func NewDepthHandler(rpcClient *rpc.RPCCLient, subMgr DepthSubMgr, depthLimit []int, depthMerge []string) *DepthHandler {
+	return &DepthHandler{
+		rpcClient:  rpcClient,
+		subMgr:     subMgr,
+		depthLimit: depthLimit,
+		depthMerge: depthMerge,
+	}
+}
+
+func (h *DepthHandler) validateLimit(limit int) bool {
+	if len(h.depthLimit) == 0 {
+		return true
+	}
+	for _, allowed := range h.depthLimit {
+		if allowed == limit {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *DepthHandler) validateInterval(interval string) bool {
+	if len(h.depthMerge) == 0 {
+		return true
+	}
+	for _, allowed := range h.depthMerge {
+		if allowed == interval {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *DepthHandler) getValidLimit(limit int) int {
+	if h.validateLimit(limit) {
+		return limit
+	}
+	if len(h.depthLimit) > 0 {
+		return h.depthLimit[0]
+	}
+	return limit
+}
+
+func (h *DepthHandler) getValidInterval(interval string) string {
+	if h.validateInterval(interval) {
+		return interval
+	}
+	if len(h.depthMerge) > 0 {
+		return h.depthMerge[0]
+	}
+	return interval
 }
 
 func (h *DepthHandler) HandleDepthQuery(sess *model.ClientSession, id interface{}, params []interface{}) *model.JSONRPCResponse {
@@ -36,7 +87,8 @@ func (h *DepthHandler) HandleDepthQuery(sess *model.ClientSession, id interface{
 		limit = int(l)
 	}
 
-	body := rpc.BuildDepthQueryBody(market, limit)
+	validLimit := h.getValidLimit(limit)
+	body := rpc.BuildDepthQueryBody(market, validLimit)
 	resp, err := h.rpcClient.QueryMatchEngine(rpc.CMD_ORDER_BOOK_DEPTH, body)
 	if err != nil {
 		return model.NewErrorResponse(id, model.ERR_INTERNAL_ERROR, err.Error())
@@ -58,9 +110,12 @@ func (h *DepthHandler) HandleDepthSubscribe(sess *model.ClientSession, id interf
 		limit = int(l)
 	}
 
-	h.subMgr.DepthSubscribe(sess, market, interval, limit)
+	validLimit := h.getValidLimit(limit)
+	validInterval := h.getValidInterval(interval)
 
-	body := rpc.BuildDepthQueryBody(market, limit)
+	h.subMgr.DepthSubscribe(sess, market, validInterval, validLimit)
+
+	body := rpc.BuildDepthQueryBody(market, validLimit)
 	resp, err := h.rpcClient.QueryMatchEngine(rpc.CMD_ORDER_BOOK_DEPTH, body)
 	if err == nil {
 		BroadcastDepthUpdate(sess, "depth.update", resp.Body, nil)

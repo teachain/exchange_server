@@ -78,7 +78,7 @@ func NewWSServer(cfg *config.Config) (*WSServer, error) {
 	s.serverHandler = handler.NewServerHandler(s.authService)
 	s.orderHandler = handler.NewOrderHandler(s.rpcClient, s.subMgr)
 	s.assetHandler = handler.NewAssetHandler(s.rpcClient, s.subMgr)
-	s.depthHandler = handler.NewDepthHandler(s.rpcClient, s.subMgr)
+	s.depthHandler = handler.NewDepthHandler(s.rpcClient, s.subMgr, cfg.DepthLimit, cfg.DepthMerge)
 	s.klineHandler = handler.NewKlineHandler(s.rpcClient, s.subMgr)
 	s.priceHandler = handler.NewPriceHandler(s.rpcClient, s.subMgr)
 	s.dealsHandler = handler.NewDealsHandler(s.rpcClient, s.subMgr)

@@ -12,6 +12,8 @@ type Config struct {
 	SignURL      string         `mapstructure:"sign_url"`
 	CacheTimeout float64        `mapstructure:"cache_timeout"`
 	Intervals    IntervalConfig `mapstructure:"intervals"`
+	DepthLimit   []int          `mapstructure:"depth_limit"`
+	DepthMerge   []string       `mapstructure:"depth_merge"`
 }
 
 type ServerConfig struct {
