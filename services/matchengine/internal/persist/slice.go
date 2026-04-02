@@ -101,10 +101,20 @@ func (sm *SliceManager) MakeSlice() error {
 }
 
 func (sm *SliceManager) DumpOrdersToFile(path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create orders file: %w", err)
+	}
+	defer file.Close()
 	return nil
 }
 
 func (sm *SliceManager) DumpBalancesToFile(path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create balances file: %w", err)
+	}
+	defer file.Close()
 	return nil
 }
 
