@@ -1,7 +1,18 @@
-[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
-
-[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
- - using env:	export GIN_MODE=release
- - using code:	gin.SetMode(gin.ReleaseMode)
-
-[GIN-debug] GET    /ws                       --> github.com/viabtc/go-project/services/accessws/internal/server.(*Server).handleWebSocket-fm (3 handlers)
+2026/04/02 11:46:41 failed to read orders message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:46:41 failed to read balances message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:46:56 failed to read balances message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:46:56 failed to read orders message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:47:11 failed to read balances message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:47:11 failed to read orders message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:47:26 failed to read orders message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:47:26 failed to read balances message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:47:41 failed to read orders message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:47:41 failed to read balances message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:47:56 failed to read balances message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:47:56 failed to read orders message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:48:11 failed to read balances message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:48:11 failed to read orders message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:48:26 failed to read balances message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:48:26 failed to read orders message: fetching message: failed to dial: failed to open connection to 127.0.0.1:9092: dial tcp 127.0.0.1:9092: connect: connection refused
+2026/04/02 11:48:41 failed to read balances message: fetching message: [15] Group Coordinator Not Available: the broker returns this error code for group coordinator requests, offset commits, and most group management requests if the offsets topic has not yet been created, or if the group coordinator is not active
+2026/04/02 11:48:41 failed to read orders message: fetching message: [15] Group Coordinator Not Available: the broker returns this error code for group coordinator requests, offset commits, and most group management requests if the offsets topic has not yet been created, or if the group coordinator is not active

@@ -52,5 +52,8 @@ func Load(path string) (*Config, error) {
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, err
 	}
+	if err := viper.Unmarshal(&cfg); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
 }

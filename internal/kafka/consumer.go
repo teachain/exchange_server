@@ -1,24 +1,35 @@
 package kafka
 
 import (
-	"github.com/IBM/sarama"
+	"context"
+	"time"
+
+	"github.com/segmentio/kafka-go"
 )
 
 type Consumer struct {
-	sarama.Consumer
-	group sarama.ConsumerGroup
+	reader *kafka.Reader
 }
 
-func NewConsumer(brokers []string, group string) (*Consumer, error) {
-	config := sarama.NewConfig()
-	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{
-		sarama.NewBalanceStrategyRoundRobin(),
-	}
+func NewConsumer(brokers []string, group string, topic string) (*Consumer, error) {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:        brokers,
+		Topic:          topic,
+		GroupID:        group,
+		MinBytes:       10e3,
+		MaxBytes:       10e6,
+		MaxWait:        1 * time.Second,
+		StartOffset:    kafka.LastOffset,
+		CommitInterval: time.Second,
+	})
 
-	consumer, err := sarama.NewConsumerGroup(brokers, group, config)
-	if err != nil {
-		return nil, err
-	}
+	return &Consumer{reader: reader}, nil
+}
 
-	return &Consumer{group: consumer}, nil
+func (c *Consumer) ReadMessage(ctx context.Context) (kafka.Message, error) {
+	return c.reader.ReadMessage(ctx)
+}
+
+func (c *Consumer) Close() error {
+	return c.reader.Close()
 }

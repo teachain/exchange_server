@@ -19,13 +19,17 @@ const (
 )
 
 func (e *Engine) ProcessOrder(incoming *order.Order) ([]*Trade, error) {
+	println("ProcessOrder: acquiring lock")
 	e.mu.Lock()
+	println("ProcessOrder: lock acquired")
 	defer e.mu.Unlock()
 
-	market, ok := e.GetMarket(incoming.Market)
+	market, ok := e.getMarketLocked(incoming.Market)
 	if !ok {
 		return nil, errors.New("market not found")
 	}
+
+	ob := e.GetOrCreateOrderBookWithLock(incoming.Market)
 
 	if incoming.Side == order.SideBuy {
 		cost := incoming.Price.Mul(incoming.Amount)
@@ -38,22 +42,31 @@ func (e *Engine) ProcessOrder(incoming *order.Order) ([]*Trade, error) {
 		}
 	}
 
+	println("ProcessOrder: balance locked, about to match")
+
 	if e.producer != nil {
 		e.producer.SendOrderEventAsync(OrderEventPut, incoming)
 	}
 
-	ob := e.GetOrCreateOrderBook(incoming.Market)
-	return e.match(ob, incoming)
+	trades, err := e.match(ob, incoming)
+	println("ProcessOrder: match finished, err=", err)
+	return trades, err
 }
 
 func (e *Engine) match(ob *order.OrderBook, incoming *order.Order) ([]*Trade, error) {
 	var trades []*Trade
 
+	println("match: incoming side=", incoming.Side, "price=", incoming.Price.String())
+
 	if incoming.Side == order.SideBuy {
+		println("match: matching against Asks, len=", ob.Asks.Len())
 		trades = e.matchAsTaker(incoming, ob.Asks, ob)
 	} else {
+		println("match: matching against Bids, len=", ob.Bids.Len())
 		trades = e.matchAsTaker(incoming, ob.Bids, ob)
 	}
+
+	println("match: finished, trades=", len(trades))
 
 	if incoming.Deal.LessThan(incoming.Amount) {
 		incoming.Status = order.OrderStatusPartial
@@ -127,6 +140,8 @@ func (e *Engine) settleTrade(trade *Trade) {
 	if e.producer != nil {
 		e.producer.SendDealEventAsync(trade)
 	}
+
+	e.AddTradeToOrder(trade)
 
 	if trade.Side == order.SideBuy {
 		cost := trade.Price.Mul(trade.Amount)

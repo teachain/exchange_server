@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/shopspring/decimal"
+	"github.com/viabtc/go-project/services/matchengine/internal/model"
 	"github.com/viabtc/go-project/services/matchengine/internal/server"
 )
 
@@ -169,11 +170,14 @@ func HandleBalanceUpdate(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error
 func HandleAssetList(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) {
 	_ = pkg
 
-	result := make([]AssetInfo, 0, len(knownAssets))
-	for _, asset := range knownAssets {
+	engine := s.GetEngine()
+	assets := engine.GetAllAssets()
+
+	result := make([]AssetInfo, 0, len(assets))
+	for _, asset := range assets {
 		result = append(result, AssetInfo{
-			Name: asset,
-			Prec: AssetPrec(asset),
+			Name: asset.Name,
+			Prec: asset.Prec,
 		})
 	}
 
@@ -191,13 +195,19 @@ func HandleAssetSummary(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error)
 	engine := s.GetEngine()
 	result := make([]AssetSummary, 0)
 
-	assets := params
-	if len(assets) == 0 {
-		assets = knownAssets
+	var assets []*model.AssetConfig
+	if len(params) == 0 {
+		assets = engine.GetAllAssets()
+	} else {
+		for _, name := range params {
+			if asset, ok := engine.GetAsset(name); ok {
+				assets = append(assets, asset)
+			}
+		}
 	}
 
 	for _, asset := range assets {
-		balances := engine.GetAllBalancesForAsset(asset)
+		balances := engine.GetAllBalancesForAsset(asset.Name)
 
 		var totalBalance, availableBalance, freezeBalance decimal.Decimal
 		var availableCount, freezeCount int
@@ -213,14 +223,13 @@ func HandleAssetSummary(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error)
 			}
 		}
 
-		prec := AssetPrec(asset)
 		result = append(result, AssetSummary{
-			Name:             asset,
-			TotalBalance:     adjustPrecision(totalBalance, prec).String(),
+			Name:             asset.Name,
+			TotalBalance:     adjustPrecision(totalBalance, asset.Prec).String(),
 			AvailableCount:   availableCount,
-			AvailableBalance: adjustPrecision(availableBalance, prec).String(),
+			AvailableBalance: adjustPrecision(availableBalance, asset.Prec).String(),
 			FreezeCount:      freezeCount,
-			FreezeBalance:    adjustPrecision(freezeBalance, prec).String(),
+			FreezeBalance:    adjustPrecision(freezeBalance, asset.Prec).String(),
 		})
 	}
 

@@ -28,7 +28,7 @@ func main() {
 	srv := server.New()
 
 	brokers := viper.GetStringSlice("kafka.brokers")
-	topic := viper.GetString("kafka.consumer.topic")
+	topic := viper.GetString("kafka.topic")
 	group := viper.GetString("kafka.consumer.group")
 	partition := int32(viper.GetInt("kafka.consumer.partition"))
 	redisHost := viper.GetString("redis.host")

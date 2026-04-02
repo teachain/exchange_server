@@ -18,7 +18,7 @@ func New(db *sqlx.DB) *Reader {
 func (r *Reader) GetBalanceHistory(userID uint32, asset, business string, startTime, endTime uint64, offset, limit int) ([]*model.BalanceHistory, error) {
 	table := model.BalanceHistoryTable(userID)
 
-	query := "SELECT time, asset, business, change, balance, detail FROM " + table + " WHERE user_id = ?"
+	query := "SELECT time, asset, business, `change`, balance, detail FROM " + table + " WHERE user_id = ?"
 	args := []interface{}{userID}
 
 	if asset != "" {

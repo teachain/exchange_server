@@ -2,8 +2,10 @@ package market
 
 import (
 	"sync"
+	"time"
 
 	"github.com/shopspring/decimal"
+	"github.com/viabtc/go-project/services/marketprice/internal/cache"
 	"github.com/viabtc/go-project/services/marketprice/internal/model"
 )
 
@@ -118,4 +120,60 @@ func (m *Manager) ListMarkets() []string {
 		markets = append(markets, name)
 	}
 	return markets
+}
+
+func (m *Manager) FlushDirty(cache *cache.RedisCache) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for marketName, info := range m.markets {
+		for key := range info.UpdateMap {
+			var interval string
+			var kline *model.KlineInfo
+
+			switch key.KlineType {
+			case KlineTypeSec:
+				interval = "sec"
+				kline = info.SecKlines[key.Timestamp]
+			case KlineTypeMin:
+				interval = "min"
+				kline = info.MinKlines[key.Timestamp]
+			case KlineTypeHour:
+				interval = "hour"
+				kline = info.HourKlines[key.Timestamp]
+			case KlineTypeDay:
+				interval = "day"
+				kline = info.DayKlines[key.Timestamp]
+			}
+
+			if kline != nil {
+				cache.FlushKline(marketName, interval, key.Timestamp, kline)
+			}
+		}
+		info.UpdateMap = make(map[model.UpdateKey]bool)
+	}
+}
+
+func (m *Manager) ClearOldKlines(secMax, minMax, hourMax int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now().Unix()
+	for _, info := range m.markets {
+		for ts := range info.SecKlines {
+			if now-ts > secMax {
+				delete(info.SecKlines, ts)
+			}
+		}
+		for ts := range info.MinKlines {
+			if now-ts > minMax {
+				delete(info.MinKlines, ts)
+			}
+		}
+		for ts := range info.HourKlines {
+			if now-ts > hourMax {
+				delete(info.HourKlines, ts)
+			}
+		}
+	}
 }

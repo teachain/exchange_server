@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"time"
 
-	"github.com/IBM/sarama"
 	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 )
 
 type Deal struct {
@@ -19,21 +20,22 @@ type Deal struct {
 }
 
 type DealConsumer struct {
-	consumer sarama.Consumer
-	handler  func(*Deal)
-	redis    *redis.Client
+	reader  *kafka.Reader
+	handler func(*Deal)
+	redis   *redis.Client
 }
 
 func NewDealConsumer(brokers []string, group string, handler func(*Deal), redisAddr string, redisPassword string) (*DealConsumer, error) {
-	config := sarama.NewConfig()
-	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{
-		sarama.NewBalanceStrategyRoundRobin(),
-	}
-
-	consumer, err := sarama.NewConsumer(brokers, config)
-	if err != nil {
-		return nil, err
-	}
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:        brokers,
+		Topic:          "deals",
+		GroupID:        group,
+		MinBytes:       10e3,
+		MaxBytes:       10e6,
+		MaxWait:        1 * time.Second,
+		StartOffset:    kafka.LastOffset,
+		CommitInterval: time.Second,
+	})
 
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     redisAddr,
@@ -41,9 +43,9 @@ func NewDealConsumer(brokers []string, group string, handler func(*Deal), redisA
 	})
 
 	return &DealConsumer{
-		consumer: consumer,
-		handler:  handler,
-		redis:    redisClient,
+		reader:  reader,
+		handler: handler,
+		redis:   redisClient,
 	}, nil
 }
 
@@ -65,22 +67,17 @@ func (c *DealConsumer) SaveOffset(offset int64) error {
 }
 
 func (c *DealConsumer) Start(topic string, partition int32) error {
-	offset, err := c.GetLastOffset()
-	if err != nil {
-		return err
-	}
-
-	if offset == -1 {
-		offset = sarama.OffsetNewest
-	}
-
-	partitionConsumer, err := c.consumer.ConsumePartition(topic, partition, offset)
-	if err != nil {
-		return err
-	}
-
 	go func() {
-		for msg := range partitionConsumer.Messages() {
+		for {
+			msg, err := c.reader.ReadMessage(context.Background())
+			if err != nil {
+				if err.Error() == "context canceled" {
+					return
+				}
+				log.Printf("read message error: %v", err)
+				continue
+			}
+
 			var deal Deal
 			if err := json.Unmarshal(msg.Value, &deal); err != nil {
 				log.Printf("unmarshal deal failed: %v", err)
@@ -94,4 +91,8 @@ func (c *DealConsumer) Start(topic string, partition int32) error {
 	}()
 
 	return nil
+}
+
+func (c *DealConsumer) Close() error {
+	return c.reader.Close()
 }

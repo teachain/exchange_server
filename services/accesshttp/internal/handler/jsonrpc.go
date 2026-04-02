@@ -63,12 +63,10 @@ func (h *Handler) HandleJSONRPC(c *gin.Context) {
 		resp, err = h.cfg.ForwardToReadHistory(c.Request.Context(), &req)
 
 	case "market.last", "market.deals", "market.kline",
-		"market.status", "market.status_today":
+		"market.status", "market.status_today", "market.list", "market.summary":
 		resp, err = h.cfg.ForwardToMarketPrice(c.Request.Context(), &req)
 	case "market.user_deals":
 		resp, err = h.cfg.ForwardToReadHistory(c.Request.Context(), &req)
-	case "market.list", "market.summary":
-		resp, err = h.cfg.ForwardToMatchEngine(c.Request.Context(), &req)
 
 	default:
 		err = &model.RPCError{Code: -32601, Message: "Method not found"}

@@ -1,18 +1,25 @@
-server:
-  host: "127.0.0.1"
-  port: 7416
-
 kafka:
   brokers:
     - "127.0.0.1:9092"
-  consumer:
-    topic: "deals"
-    group: "marketprice"
-    offset: "newest"
+  topic: "deals"
+  group_id: "marketprice"
+  partition: 0
 
 redis:
   host: "127.0.0.1"
   port: 6379
-  password: ""
+  password: "redis123"
   db: 0
-  pool_size: 100
+  sentinel:
+    enabled: false
+    master: "mymaster"
+    addrs: []
+
+cache:
+  sec_max: 86400      # 24 hours
+  min_max: 604800     # 7 days
+  hour_max: 2592000   # 30 days
+
+server:
+  host: "0.0.0.0"
+  port: 7416

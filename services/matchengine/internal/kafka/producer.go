@@ -1,10 +1,12 @@
 package kafka
 
 import (
+	"context"
 	"encoding/json"
 	"log"
+	"time"
 
-	"github.com/IBM/sarama"
+	"github.com/segmentio/kafka-go"
 	"github.com/shopspring/decimal"
 	"github.com/viabtc/go-project/services/matchengine/internal/engine"
 	orderpkg "github.com/viabtc/go-project/services/matchengine/internal/order"
@@ -20,25 +22,23 @@ type Producer struct {
 	ordersTopic   string
 	dealsTopic    string
 	balancesTopic string
-	producer      sarama.SyncProducer
+	writer        *kafka.Writer
 }
 
 func NewProducer(brokers []string, ordersTopic, dealsTopic, balancesTopic string) (*Producer, error) {
-	config := sarama.NewConfig()
-	config.Producer.RequiredAcks = sarama.WaitForAll
-	config.Producer.Retry.Max = 5
-	config.Producer.Return.Successes = true
-
-	producer, err := sarama.NewSyncProducer(brokers, config)
-	if err != nil {
-		return nil, err
+	writer := &kafka.Writer{
+		Addr:         kafka.TCP(brokers...),
+		Balancer:     &kafka.LeastBytes{},
+		BatchSize:    1,
+		BatchTimeout: 10 * time.Millisecond,
+		RequiredAcks: kafka.RequireAll,
 	}
 
 	return &Producer{
 		ordersTopic:   ordersTopic,
 		dealsTopic:    dealsTopic,
 		balancesTopic: balancesTopic,
-		producer:      producer,
+		writer:        writer,
 	}, nil
 }
 
@@ -56,12 +56,11 @@ func (p *Producer) SendOrderEvent(event int, order *orderpkg.Order) error {
 		return err
 	}
 
-	_, _, err = p.producer.SendMessage(&sarama.ProducerMessage{
+	return p.writer.WriteMessages(context.Background(), kafka.Message{
 		Topic: p.ordersTopic,
-		Key:   sarama.StringEncoder(string(rune(order.ID))),
-		Value: sarama.ByteEncoder(data),
+		Key:   []byte(string(rune(order.ID))),
+		Value: data,
 	})
-	return err
 }
 
 func (p *Producer) SendDealEvent(trade *engine.Trade) error {
@@ -76,12 +75,11 @@ func (p *Producer) SendDealEvent(trade *engine.Trade) error {
 		return err
 	}
 
-	_, _, err = p.producer.SendMessage(&sarama.ProducerMessage{
+	return p.writer.WriteMessages(context.Background(), kafka.Message{
 		Topic: p.dealsTopic,
-		Key:   sarama.StringEncoder(string(rune(trade.ID))),
-		Value: sarama.ByteEncoder(data),
+		Key:   []byte(string(rune(trade.ID))),
+		Value: data,
 	})
-	return err
 }
 
 func (p *Producer) SendBalanceUpdate(userID int64, asset string, change decimal.Decimal) error {
@@ -97,16 +95,15 @@ func (p *Producer) SendBalanceUpdate(userID int64, asset string, change decimal.
 		return err
 	}
 
-	_, _, err = p.producer.SendMessage(&sarama.ProducerMessage{
+	return p.writer.WriteMessages(context.Background(), kafka.Message{
 		Topic: p.balancesTopic,
-		Key:   sarama.StringEncoder(string(rune(userID))),
-		Value: sarama.ByteEncoder(data),
+		Key:   []byte(string(rune(userID))),
+		Value: data,
 	})
-	return err
 }
 
 func (p *Producer) Close() error {
-	return p.producer.Close()
+	return p.writer.Close()
 }
 
 func (p *Producer) SendOrderEventAsync(event int, order *orderpkg.Order) {

@@ -1,34 +1,37 @@
 package kafka
 
 import (
-	"github.com/IBM/sarama"
+	"context"
+	"time"
+
+	"github.com/segmentio/kafka-go"
 )
 
 type Producer struct {
-	sarama.SyncProducer
+	writer *kafka.Writer
 }
 
 func NewProducer(brokers []string) (*Producer, error) {
-	config := sarama.NewConfig()
-	config.Producer.RequiredAcks = sarama.WaitForAll
-	config.Producer.Retry.Max = 5
-	config.Producer.Return.Successes = true
-
-	producer, err := sarama.NewSyncProducer(brokers, config)
-	if err != nil {
-		return nil, err
+	writer := &kafka.Writer{
+		Addr:         kafka.TCP(brokers...),
+		Balancer:     &kafka.LeastBytes{},
+		BatchSize:    1,
+		BatchTimeout: 10 * time.Millisecond,
+		RequiredAcks: kafka.RequireAll,
+		Async:        false,
 	}
 
-	return &Producer{producer}, nil
+	return &Producer{writer: writer}, nil
 }
 
 func (p *Producer) SendMessage(topic string, key string, value []byte) error {
-	msg := &sarama.ProducerMessage{
+	return p.writer.WriteMessages(context.Background(), kafka.Message{
 		Topic: topic,
-		Key:   sarama.StringEncoder(key),
-		Value: sarama.ByteEncoder(value),
-	}
+		Key:   []byte(key),
+		Value: value,
+	})
+}
 
-	_, _, err := p.SendMessage(msg)
-	return err
+func (p *Producer) Close() error {
+	return p.writer.Close()
 }

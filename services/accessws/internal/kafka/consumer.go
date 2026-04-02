@@ -1,11 +1,13 @@
 package kafka
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
-	"github.com/IBM/sarama"
+	"github.com/segmentio/kafka-go"
 	"github.com/viabtc/go-project/services/accessws/internal/handler"
 	"github.com/viabtc/go-project/services/accessws/internal/model"
 	"github.com/viabtc/go-project/services/accessws/internal/rpc"
@@ -47,62 +49,83 @@ func NewConsumer(brokers []string, group, ordersTopic, balancesTopic string, sub
 }
 
 func (c *Consumer) Start() error {
-	config := sarama.NewConfig()
-	config.Consumer.Group.Rebalance.GroupStrategies = []sarama.BalanceStrategy{sarama.NewBalanceStrategyRoundRobin()}
-	config.Consumer.Offsets.Initial = sarama.OffsetNewest
-
-	ordersConsumer, err := sarama.NewConsumerGroup(c.brokers, c.group+"_orders", config)
-	if err != nil {
-		return err
-	}
-
-	balancesConsumer, err := sarama.NewConsumerGroup(c.brokers, c.group+"_balances", config)
-	if err != nil {
-		return err
-	}
-
-	ordersHandler := &consumerGroupHandler{
-		consumerType: "orders",
-		subMgr:       c.subMgr,
-		rpcClient:    c.rpcClient,
-		notifyCh:     c.notifyCh,
-	}
-
-	balancesHandler := &consumerGroupHandler{
-		consumerType: "balances",
-		subMgr:       c.subMgr,
-		rpcClient:    c.rpcClient,
-		notifyCh:     c.notifyCh,
-	}
-
 	c.wg.Add(2)
+
 	go func() {
 		defer c.wg.Done()
-		for {
-			select {
-			case <-c.stopCh:
-				return
-			default:
-				ordersConsumer.Consume(nil, []string{c.ordersTopic}, ordersHandler)
-			}
-		}
+		c.consumeOrders()
 	}()
 
 	go func() {
 		defer c.wg.Done()
-		for {
-			select {
-			case <-c.stopCh:
-				return
-			default:
-				balancesConsumer.Consume(nil, []string{c.balancesTopic}, balancesHandler)
-			}
-		}
+		c.consumeBalances()
 	}()
 
 	go c.processNotifications()
 
 	return nil
+}
+
+func (c *Consumer) consumeOrders() {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:        c.brokers,
+		Topic:          c.ordersTopic,
+		GroupID:        c.group + "_orders",
+		MinBytes:       10e3,
+		MaxBytes:       10e6,
+		MaxWait:        1 * time.Second,
+		StartOffset:    kafka.LastOffset,
+		CommitInterval: time.Second,
+	})
+	defer reader.Close()
+
+	for {
+		select {
+		case <-c.stopCh:
+			return
+		default:
+			msg, err := reader.ReadMessage(context.Background())
+			if err != nil {
+				if err == context.Canceled || err == context.DeadlineExceeded {
+					return
+				}
+				log.Printf("failed to read orders message: %v", err)
+				continue
+			}
+			c.processOrdersMessage(msg.Value)
+		}
+	}
+}
+
+func (c *Consumer) consumeBalances() {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers:        c.brokers,
+		Topic:          c.balancesTopic,
+		GroupID:        c.group + "_balances",
+		MinBytes:       10e3,
+		MaxBytes:       10e6,
+		MaxWait:        1 * time.Second,
+		StartOffset:    kafka.LastOffset,
+		CommitInterval: time.Second,
+	})
+	defer reader.Close()
+
+	for {
+		select {
+		case <-c.stopCh:
+			return
+		default:
+			msg, err := reader.ReadMessage(context.Background())
+			if err != nil {
+				if err == context.Canceled || err == context.DeadlineExceeded {
+					return
+				}
+				log.Printf("failed to read balances message: %v", err)
+				continue
+			}
+			c.processBalancesMessage(msg.Value)
+		}
+	}
 }
 
 func (c *Consumer) processNotifications() {
@@ -132,47 +155,20 @@ func (c *Consumer) Stop() {
 	c.wg.Wait()
 }
 
-type consumerGroupHandler struct {
-	consumerType string
-	subMgr       *subscription.Manager
-	rpcClient    *rpc.RPCCLient
-	notifyCh     chan *Notification
-}
-
-func (h *consumerGroupHandler) Setup(sarama.ConsumerGroupSession) error   { return nil }
-func (h *consumerGroupHandler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
-
-func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for {
-		select {
-		case msg, ok := <-claim.Messages():
-			if !ok {
-				return nil
-			}
-			if h.consumerType == "orders" {
-				h.processOrdersMessage(msg.Value)
-			} else {
-				h.processBalancesMessage(msg.Value)
-			}
-			session.MarkMessage(msg, "")
-		}
-	}
-}
-
-func (h *consumerGroupHandler) processOrdersMessage(data []byte) {
+func (c *Consumer) processOrdersMessage(data []byte) {
 	var event model.OrderEvent
 	if err := json.Unmarshal(data, &event); err != nil {
 		log.Printf("failed to parse order event: %v", err)
 		return
 	}
 
-	h.notifyCh <- &Notification{
+	c.notifyCh <- &Notification{
 		Method: "order.update",
 		Params: event,
 		UserID: event.Order.UserID,
 	}
 
-	h.notifyCh <- &Notification{
+	c.notifyCh <- &Notification{
 		Method: "asset.update",
 		Params: map[string]interface{}{
 			"asset":  event.Stock,
@@ -185,7 +181,7 @@ func (h *consumerGroupHandler) processOrdersMessage(data []byte) {
 	}
 }
 
-func (h *consumerGroupHandler) processBalancesMessage(data []byte) {
+func (c *Consumer) processBalancesMessage(data []byte) {
 	var fields []interface{}
 	if err := json.Unmarshal(data, &fields); err != nil {
 		log.Printf("failed to parse balance event: %v", err)
@@ -203,13 +199,13 @@ func (h *consumerGroupHandler) processBalancesMessage(data []byte) {
 	}
 
 	body := rpc.BuildBalanceQueryBody(uint32(userID), asset)
-	resp, err := h.rpcClient.QueryMatchEngine(rpc.CMD_BALANCE_QUERY, body)
+	resp, err := c.rpcClient.QueryMatchEngine(rpc.CMD_BALANCE_QUERY, body)
 	if err != nil {
 		log.Printf("failed to query balance: %v", err)
 		return
 	}
 
-	h.notifyCh <- &Notification{
+	c.notifyCh <- &Notification{
 		Method: "asset.update",
 		Params: json.RawMessage(resp.Body),
 		UserID: uint32(userID),

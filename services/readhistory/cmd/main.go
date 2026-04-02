@@ -67,4 +67,6 @@ func main() {
 	if err := srv.Start(addr); err != nil {
 		log.Fatal("server failed:", err)
 	}
+
+	<-make(chan struct{})
 }

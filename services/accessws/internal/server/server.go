@@ -309,9 +309,73 @@ func (s *WSServer) pollDepth() {
 			continue
 		}
 
+		oldSnapshot := s.subMgr.GetDepthSnapshot(key)
+
+		var depth struct {
+			Bids [][]string `json:"bids"`
+			Asks [][]string `json:"asks"`
+		}
+		json.Unmarshal(resp.Body, &depth)
+
+		newSnapshot := &model.DepthSnapshot{
+			Bids: make(map[string]string),
+			Asks: make(map[string]string),
+		}
+		for _, bid := range depth.Bids {
+			if len(bid) >= 2 {
+				newSnapshot.Bids[bid[0]] = bid[1]
+			}
+		}
+		for _, ask := range depth.Asks {
+			if len(ask) >= 2 {
+				newSnapshot.Asks[ask[0]] = ask[1]
+			}
+		}
+
 		subs := s.subMgr.GetDepthSubscribers(key)
-		handler.BroadcastToSessions(subs, "depth.update", json.RawMessage(resp.Body))
+
+		if oldSnapshot == nil {
+			handler.BroadcastToSessions(subs, "depth.update", json.RawMessage(resp.Body))
+		} else {
+			diff := computeDepthDiffModel(oldSnapshot, newSnapshot)
+			diffJSON, _ := json.Marshal(diff)
+			handler.BroadcastToSessions(subs, "depth.update", diffJSON)
+		}
+
+		s.subMgr.SetDepthSnapshot(key, newSnapshot)
 	}
+}
+
+func computeDepthDiffModel(oldSnap, newSnap *model.DepthSnapshot) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	var updatedBids [][]string
+	for price, amount := range newSnap.Bids {
+		if oldAmount, exists := oldSnap.Bids[price]; !exists || oldAmount != amount {
+			updatedBids = append(updatedBids, []string{price, amount})
+		}
+	}
+	for price := range oldSnap.Bids {
+		if _, exists := newSnap.Bids[price]; !exists {
+			updatedBids = append(updatedBids, []string{price, "0"})
+		}
+	}
+
+	var updatedAsks [][]string
+	for price, amount := range newSnap.Asks {
+		if oldAmount, exists := oldSnap.Asks[price]; !exists || oldAmount != amount {
+			updatedAsks = append(updatedAsks, []string{price, amount})
+		}
+	}
+	for price := range oldSnap.Asks {
+		if _, exists := newSnap.Asks[price]; !exists {
+			updatedAsks = append(updatedAsks, []string{price, "0"})
+		}
+	}
+
+	result["bids"] = updatedBids
+	result["asks"] = updatedAsks
+	return result
 }
 
 func (s *WSServer) pollPrice() {

@@ -45,6 +45,7 @@ type Engine struct {
 	markets     map[string]*model.MarketConfig
 	assets      map[string]*model.AssetConfig
 	producer    Producer
+	orderTrades map[int64][]*Trade
 }
 
 func NewEngine() *Engine {
@@ -56,6 +57,7 @@ func NewEngine() *Engine {
 		idGenerator: NewIDGenerator(),
 		markets:     make(map[string]*model.MarketConfig),
 		assets:      make(map[string]*model.AssetConfig),
+		orderTrades: make(map[int64][]*Trade),
 	}
 	e.LoadConfig()
 	return e
@@ -63,17 +65,12 @@ func NewEngine() *Engine {
 
 func (e *Engine) LoadConfig() {
 	var cfg model.Config
-	marketsSub := viper.Sub("markets")
-	if marketsSub != nil {
-		if err := marketsSub.UnmarshalExact(&cfg.Markets); err != nil {
-			cfg.Markets = nil
-		}
+
+	if err := viper.UnmarshalKey("markets", &cfg.Markets); err != nil {
+		println("markets unmarshal error:", err.Error())
 	}
-	assetsSub := viper.Sub("assets")
-	if assetsSub != nil {
-		if err := assetsSub.UnmarshalExact(&cfg.Assets); err != nil {
-			cfg.Assets = nil
-		}
+	if err := viper.UnmarshalKey("assets", &cfg.Assets); err != nil {
+		println("assets unmarshal error:", err.Error())
 	}
 
 	for _, m := range cfg.Markets {
@@ -87,6 +84,10 @@ func (e *Engine) LoadConfig() {
 func (e *Engine) GetMarket(name string) (*model.MarketConfig, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+	return e.getMarketLocked(name)
+}
+
+func (e *Engine) getMarketLocked(name string) (*model.MarketConfig, bool) {
 	m, ok := e.markets[name]
 	return m, ok
 }
@@ -102,6 +103,19 @@ func (e *Engine) GetOrCreateOrderBook(market string) *order.OrderBook {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	return e.getOrCreateOrderBookLocked(market)
+}
+
+func (e *Engine) GetOrCreateOrderBookWithLock(market string) *order.OrderBook {
+	ob, ok := e.orderBooks[market]
+	if !ok {
+		ob = order.NewOrderBook()
+		e.orderBooks[market] = ob
+	}
+	return ob
+}
+
+func (e *Engine) getOrCreateOrderBookLocked(market string) *order.OrderBook {
 	ob, ok := e.orderBooks[market]
 	if !ok {
 		ob = order.NewOrderBook()
@@ -165,6 +179,17 @@ func (e *Engine) ListMarkets() []string {
 	return markets
 }
 
+func (e *Engine) GetAllAssets() []*model.AssetConfig {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	assets := make([]*model.AssetConfig, 0, len(e.assets))
+	for _, a := range e.assets {
+		assets = append(assets, a)
+	}
+	return assets
+}
+
 func (e *Engine) GetBalances() *balance.BalanceManager {
 	return e.balances
 }
@@ -179,4 +204,31 @@ func (e *Engine) OrderChan() <-chan *order.Order {
 
 func (e *Engine) SetProducer(p Producer) {
 	e.producer = p
+}
+
+func (e *Engine) AddTradeToOrder(trade *Trade) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.orderTrades[trade.TakerOrderID] = append(e.orderTrades[trade.TakerOrderID], trade)
+	e.orderTrades[trade.MakerOrderID] = append(e.orderTrades[trade.MakerOrderID], trade)
+}
+
+func (e *Engine) GetOrderTrades(orderID int64, offset, limit int) ([]*Trade, int) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	trades := e.orderTrades[orderID]
+	total := len(trades)
+
+	if offset >= total {
+		return []*Trade{}, total
+	}
+
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	return trades[offset:end], total
 }

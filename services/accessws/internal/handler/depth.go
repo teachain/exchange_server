@@ -15,6 +15,8 @@ type DepthSubMgr interface {
 	DepthSubscribe(*model.ClientSession, string, string, int)
 	DepthUnsubscribe(*model.ClientSession)
 	GetDepthSubscribers(string) []*model.ClientSession
+	GetDepthSnapshot(string) *model.DepthSnapshot
+	SetDepthSnapshot(string, *model.DepthSnapshot)
 }
 
 func NewDepthHandler(rpcClient *rpc.RPCCLient, subMgr DepthSubMgr) *DepthHandler {
@@ -55,7 +57,15 @@ func (h *DepthHandler) HandleDepthSubscribe(sess *model.ClientSession, id interf
 	if l, ok := params[2].(float64); ok {
 		limit = int(l)
 	}
+
 	h.subMgr.DepthSubscribe(sess, market, interval, limit)
+
+	body := rpc.BuildDepthQueryBody(market, limit)
+	resp, err := h.rpcClient.QueryMatchEngine(rpc.CMD_ORDER_BOOK_DEPTH, body)
+	if err == nil {
+		BroadcastDepthUpdate(sess, "depth.update", resp.Body, nil)
+	}
+
 	return model.NewSuccessResponse(id, true)
 }
 

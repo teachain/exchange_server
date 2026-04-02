@@ -59,6 +59,18 @@ type TradeInfo struct {
 	CreateTime   float64         `json:"ctime"`
 }
 
+type DealRecord struct {
+	ID          int64           `json:"id"`
+	Time        float64         `json:"time"`
+	User        int64           `json:"user"`
+	Role        int             `json:"role"`
+	Amount      decimal.Decimal `json:"amount"`
+	Price       decimal.Decimal `json:"price"`
+	Deal        decimal.Decimal `json:"deal"`
+	Fee         decimal.Decimal `json:"fee"`
+	DealOrderID int64           `json:"deal_order_id"`
+}
+
 type DepthLevel struct {
 	Price  string `json:"price"`
 	Amount string `json:"amount"`
@@ -766,26 +778,21 @@ func HandleOrderDeals(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) {
 		return nil, fmt.Errorf("invalid params: %w", err)
 	}
 
-	if len(params) != 4 {
-		return nil, fmt.Errorf("invalid arguments: expected 4 params")
+	if len(params) != 3 {
+		return nil, fmt.Errorf("invalid arguments: expected 3 params")
 	}
 
-	userID, ok := params[0].(float64)
+	orderID, ok := params[0].(float64)
 	if !ok {
-		return nil, fmt.Errorf("invalid user_id")
+		return nil, fmt.Errorf("invalid order_id")
 	}
 
-	market, ok := params[1].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid market")
-	}
-
-	offset, ok := params[2].(float64)
+	offset, ok := params[1].(float64)
 	if !ok {
 		return nil, fmt.Errorf("invalid offset")
 	}
 
-	limit, ok := params[3].(float64)
+	limit, ok := params[2].(float64)
 	if !ok {
 		return nil, fmt.Errorf("invalid limit")
 	}
@@ -795,24 +802,48 @@ func HandleOrderDeals(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) {
 	}
 
 	eng := s.GetEngine()
-	_, ok = eng.GetOrderBook(market)
-	if !ok {
-		result := map[string]interface{}{
-			"limit":   int(limit),
-			"offset":  int(offset),
-			"total":   0,
-			"records": []TradeInfo{},
-		}
-		return json.Marshal(result)
-	}
+	trades, total := eng.GetOrderTrades(int64(orderID), int(offset), int(limit))
 
-	_ = userID
+	records := make([]DealRecord, 0, len(trades))
+	for _, t := range trades {
+		var userID int64
+		var role int
+		var dealAmount decimal.Decimal
+		var fee decimal.Decimal
+		var dealOrderID int64
+
+		if t.TakerOrderID == int64(orderID) {
+			userID = t.TakerUserID
+			role = 2
+			dealAmount = t.Amount
+			fee = t.TakerFee
+			dealOrderID = t.MakerOrderID
+		} else {
+			userID = t.MakerUserID
+			role = 1
+			dealAmount = t.Amount
+			fee = t.MakerFee
+			dealOrderID = t.TakerOrderID
+		}
+
+		records = append(records, DealRecord{
+			ID:          t.ID,
+			Time:        float64(t.CreatedAt.Unix()),
+			User:        userID,
+			Role:        role,
+			Amount:      t.Amount,
+			Price:       t.Price,
+			Deal:        dealAmount,
+			Fee:         fee,
+			DealOrderID: dealOrderID,
+		})
+	}
 
 	result := map[string]interface{}{
 		"limit":   int(limit),
 		"offset":  int(offset),
-		"total":   0,
-		"records": []TradeInfo{},
+		"total":   total,
+		"records": records,
 	}
 
 	return json.Marshal(result)

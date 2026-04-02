@@ -35,6 +35,8 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/order/:id", s.handleGetOrder)
 	s.router.GET("/balance/:user_id/:asset", s.handleGetBalance)
 	s.router.GET("/depth/:market", s.handleGetDepth)
+	s.router.GET("/asset/list", s.handleAssetList)
+	s.router.GET("/asset/summary", s.handleAssetSummary)
 }
 
 func (s *Server) handleHealth(c *gin.Context) {
@@ -215,4 +217,68 @@ func parseSide(s string) (order.Side, error) {
 	default:
 		return 0, order.ErrInvalidSide
 	}
+}
+
+func (s *Server) handleAssetList(c *gin.Context) {
+	assets := s.engine.GetAllAssets()
+
+	result := make([]gin.H, 0, len(assets))
+	for _, asset := range assets {
+		result = append(result, gin.H{
+			"name": asset.Name,
+			"prec": asset.Prec,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"assets": result,
+	})
+}
+
+func (s *Server) handleAssetSummary(c *gin.Context) {
+	assets := s.engine.GetAllAssets()
+
+	result := make([]gin.H, 0, len(assets))
+	for _, asset := range assets {
+		balances := s.engine.GetAllBalancesForAsset(asset.Name)
+
+		var totalBalance, availableBalance, freezeBalance decimal.Decimal
+		var availableCount, freezeCount int
+
+		for _, bal := range balances {
+			totalBalance = totalBalance.Add(bal.Balance)
+			if bal.Frozen.IsZero() {
+				availableCount++
+				availableBalance = availableBalance.Add(bal.Balance)
+			} else {
+				freezeCount++
+				freezeBalance = freezeBalance.Add(bal.Frozen)
+			}
+		}
+
+		result = append(result, gin.H{
+			"name":              asset.Name,
+			"total_balance":     adjustPrecision(totalBalance, asset.Prec).String(),
+			"available_count":   availableCount,
+			"available_balance": adjustPrecision(availableBalance, asset.Prec).String(),
+			"freeze_count":      freezeCount,
+			"freeze_balance":    adjustPrecision(freezeBalance, asset.Prec).String(),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"assets": result,
+	})
+}
+
+func adjustPrecision(d decimal.Decimal, prec int) decimal.Decimal {
+	if prec <= 0 {
+		return d
+	}
+	multiplier := decimal.NewFromInt(10)
+	for i := 0; i < prec; i++ {
+		multiplier = multiplier.Mul(decimal.NewFromInt(10))
+	}
+	truncated := d.Mul(multiplier).Floor().Div(multiplier)
+	return truncated
 }

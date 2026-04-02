@@ -89,3 +89,67 @@ func BroadcastToSessions(sessions []*model.ClientSession, method string, params 
 		SendNotify(sess.Conn, method, params)
 	}
 }
+
+func BroadcastDepthUpdate(sess *model.ClientSession, method string, currentData []byte, oldSnapshot *model.DepthSnapshot) {
+	var depth struct {
+		Bids [][]string `json:"bids"`
+		Asks [][]string `json:"asks"`
+	}
+	json.Unmarshal(currentData, &depth)
+
+	currentSnapshot := &model.DepthSnapshot{
+		Bids: make(map[string]string),
+		Asks: make(map[string]string),
+	}
+	for _, bid := range depth.Bids {
+		if len(bid) >= 2 {
+			currentSnapshot.Bids[bid[0]] = bid[1]
+		}
+	}
+	for _, ask := range depth.Asks {
+		if len(ask) >= 2 {
+			currentSnapshot.Asks[ask[0]] = ask[1]
+		}
+	}
+
+	var diff interface{}
+	if oldSnapshot == nil {
+		diff = depth
+	} else {
+		diff = computeDepthDiff(oldSnapshot, currentSnapshot)
+	}
+
+	SendNotify(sess.Conn, method, diff)
+}
+
+func computeDepthDiff(oldSnap, newSnap *model.DepthSnapshot) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	var updatedBids [][]string
+	for price, amount := range newSnap.Bids {
+		if oldAmount, exists := oldSnap.Bids[price]; !exists || oldAmount != amount {
+			updatedBids = append(updatedBids, []string{price, amount})
+		}
+	}
+	for price := range oldSnap.Bids {
+		if _, exists := newSnap.Bids[price]; !exists {
+			updatedBids = append(updatedBids, []string{price, "0"})
+		}
+	}
+
+	var updatedAsks [][]string
+	for price, amount := range newSnap.Asks {
+		if oldAmount, exists := oldSnap.Asks[price]; !exists || oldAmount != amount {
+			updatedAsks = append(updatedAsks, []string{price, amount})
+		}
+	}
+	for price := range oldSnap.Asks {
+		if _, exists := newSnap.Asks[price]; !exists {
+			updatedAsks = append(updatedAsks, []string{price, "0"})
+		}
+	}
+
+	result["bids"] = updatedBids
+	result["asks"] = updatedAsks
+	return result
+}

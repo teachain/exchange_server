@@ -7,14 +7,14 @@ database:
   port: 3306
   name: "trade_log"
   username: "root"
-  password: ""
+  password: "qq851126"
   max_open: 100
   max_idle: 50
 
 redis:
   host: "127.0.0.1"
   port: 6379
-  password: ""
+  password: "123456"
   db: 0
   pool_size: 100
 
@@ -38,9 +38,18 @@ markets:
     min_amount: "0.0001"
 
 assets:
-  - name: "BTC"
-    prec: 8
-    prec_show: 8
   - name: "USDT"
-    prec: 8
-    prec_show: 2
+    prec: 16
+    prec_show: 8
+  - name: "SIPC"
+    prec: 16
+    prec_show: 8
+  - name: "BTC"
+    prec: 16
+    prec_show: 8
+  - name: "GTC"
+    prec: 16
+    prec_show: 8
+  - name: "BVIP"
+    prec: 16
+    prec_show: 8
