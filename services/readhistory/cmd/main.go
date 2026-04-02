@@ -7,14 +7,32 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/viper"
+	"golang.org/x/sys/unix"
+
+	rotatelog "github.com/viabtc/go-project/services/readhistory/internal/log"
 	"github.com/viabtc/go-project/services/readhistory/internal/reader"
 	"github.com/viabtc/go-project/services/readhistory/internal/server"
 	"github.com/viabtc/go-project/services/readhistory/internal/server/handler"
 )
+
+func setFileLimit(max uint64) {
+	var rlimit unix.Rlimit
+	rlimit.Cur = max
+	rlimit.Max = max
+	unix.Setrlimit(unix.RLIMIT_NOFILE, &rlimit)
+}
+
+func setCoreLimit(max uint64) {
+	var rlimit unix.Rlimit
+	rlimit.Cur = max
+	rlimit.Max = max
+	unix.Setrlimit(unix.RLIMIT_CORE, &rlimit)
+}
 
 func getDBPassword() string {
 	if pw := os.Getenv("DB_PASSWORD"); pw != "" {
@@ -33,6 +51,9 @@ func main() {
 		log.Fatal("load config failed:", err.Error())
 	}
 
+	setFileLimit(1000000)
+	setCoreLimit(1000000000)
+
 	host := viper.GetString("server.host")
 	port := viper.GetInt("server.port")
 	dbHost := viper.GetString("database.host")
@@ -50,6 +71,25 @@ func main() {
 
 	r := reader.New(db)
 	srv := server.New(r)
+	srv.SetTimeout(30 * time.Second)
+
+	logger, err := rotatelog.NewLogger("readhistory.log")
+	if err != nil {
+		log.Fatal("failed to create logger:", err)
+	}
+	defer logger.Close()
+
+	monitorPort := viper.GetInt("monitor.port")
+	if monitorPort == 0 {
+		monitorPort = 8080
+	}
+	monitorSrv := server.NewMonitorServer(monitorPort)
+	go func() {
+		log.Println("Starting monitor server on :", monitorPort)
+		if err := monitorSrv.Start(); err != nil {
+			log.Println("monitor server failed:", err)
+		}
+	}()
 
 	handler.RegisterBalanceHandlers(srv)
 	handler.RegisterOrderHandlers(srv)
@@ -59,6 +99,7 @@ func main() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
+		logger.Close()
 		os.Exit(0)
 	}()
 
