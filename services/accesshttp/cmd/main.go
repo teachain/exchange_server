@@ -7,9 +7,25 @@ import (
 	"os/signal"
 	"syscall"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/viabtc/go-project/services/accesshttp/internal/config"
 	"github.com/viabtc/go-project/services/accesshttp/internal/server"
 )
+
+func setFileLimit(max uint64) {
+	var rlimit unix.Rlimit
+	rlimit.Cur = max
+	rlimit.Max = max
+	unix.Setrlimit(unix.RLIMIT_NOFILE, &rlimit)
+}
+
+func setCoreLimit(max uint64) {
+	var rlimit unix.Rlimit
+	rlimit.Cur = max
+	rlimit.Max = max
+	unix.Setrlimit(unix.RLIMIT_CORE, &rlimit)
+}
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "config file path")
@@ -20,6 +36,9 @@ func main() {
 		fmt.Println("load config failed:", err.Error())
 		os.Exit(1)
 	}
+
+	setFileLimit(1000000)
+	setCoreLimit(1000000000)
 
 	srv := server.New(cfg)
 
