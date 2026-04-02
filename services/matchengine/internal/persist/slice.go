@@ -10,13 +10,14 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/shopspring/decimal"
 	"github.com/viabtc/go-project/services/matchengine/internal/balance"
 	"github.com/viabtc/go-project/services/matchengine/internal/order"
 )
 
 type SliceManager struct {
-	db            *sql.DB
+	db            *sqlx.DB
 	persister     Persister
 	sliceInterval time.Duration
 	sliceKeepTime time.Duration
@@ -29,7 +30,7 @@ type sliceInfo struct {
 	Path      string    `json:"path"`
 }
 
-func NewSliceManager(db *sql.DB, persister Persister, sliceInterval, sliceKeepTime time.Duration, sliceDir string) *SliceManager {
+func NewSliceManager(db *sqlx.DB, persister Persister, sliceInterval, sliceKeepTime time.Duration, sliceDir string) *SliceManager {
 	return &SliceManager{
 		db:            db,
 		persister:     persister,

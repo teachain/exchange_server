@@ -195,3 +195,14 @@ func (bm *BalanceManager) ListAssets() []string {
 	}
 	return assets
 }
+
+func (bm *BalanceManager) GetAllBalances() map[string]*Balance {
+	bm.mu.RLock()
+	defer bm.mu.RUnlock()
+
+	result := make(map[string]*Balance)
+	for k, b := range bm.balances {
+		result[k] = b
+	}
+	return result
+}

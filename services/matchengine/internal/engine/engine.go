@@ -9,6 +9,7 @@ import (
 	"github.com/viabtc/go-project/services/matchengine/internal/balance"
 	"github.com/viabtc/go-project/services/matchengine/internal/model"
 	"github.com/viabtc/go-project/services/matchengine/internal/order"
+	"github.com/viabtc/go-project/services/matchengine/internal/persist"
 )
 
 type Trade struct {
@@ -36,17 +37,18 @@ type Producer interface {
 }
 
 type Engine struct {
-	mu          sync.RWMutex
-	orderBooks  map[string]*order.OrderBook
-	balances    *balance.BalanceManager
-	tradeCh     chan *Trade
-	orderCh     chan *order.Order
-	idGenerator *IDGenerator
-	markets     map[string]*model.MarketConfig
-	assets      map[string]*model.AssetConfig
-	producer    Producer
-	orderTrades map[uint64][]*Trade
-	stopMgr     *StopManager
+	mu            sync.RWMutex
+	orderBooks    map[string]*order.OrderBook
+	balances      *balance.BalanceManager
+	tradeCh       chan *Trade
+	orderCh       chan *order.Order
+	idGenerator   *IDGenerator
+	markets       map[string]*model.MarketConfig
+	assets        map[string]*model.AssetConfig
+	producer      Producer
+	orderTrades   map[uint64][]*Trade
+	stopMgr       *StopManager
+	operLogWriter *persist.OperLogWriter
 }
 
 func NewEngine() *Engine {
@@ -299,4 +301,50 @@ func (e *Engine) ProcessTriggeredStopOrders(market string, lastPrice decimal.Dec
 
 func (e *Engine) GetStopManager() *StopManager {
 	return e.stopMgr
+}
+
+func (e *Engine) SetOperLogWriter(operLogWriter *persist.OperLogWriter) {
+	e.operLogWriter = operLogWriter
+}
+
+func (e *Engine) WriteOperLog(logType persist.OperLogType, data interface{}) {
+	if e.operLogWriter != nil {
+		log, err := persist.NewOperLog(logType, data)
+		if err != nil {
+			return
+		}
+		e.operLogWriter.Write(log)
+	}
+}
+
+func (e *Engine) GetAllOrders() map[string][]*order.Order {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	result := make(map[string][]*order.Order)
+	for market, ob := range e.orderBooks {
+		result[market] = ob.GetOrders()
+	}
+	return result
+}
+
+func (e *Engine) GetAllBalances() map[string]*balance.Balance {
+	return e.balances.GetAllBalances()
+}
+
+func (e *Engine) GetLastPrice(market string) decimal.Decimal {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	ob, ok := e.orderBooks[market]
+	if !ok {
+		return decimal.Zero
+	}
+
+	orders := ob.GetOrders()
+	if len(orders) == 0 {
+		return decimal.Zero
+	}
+
+	return orders[len(orders)-1].Price
 }

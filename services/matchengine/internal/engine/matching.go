@@ -7,6 +7,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	"github.com/viabtc/go-project/services/matchengine/internal/order"
+	"github.com/viabtc/go-project/services/matchengine/internal/persist"
 )
 
 var TakerFeeRate = decimal.NewFromFloat(0.001)
@@ -42,6 +43,21 @@ func (e *Engine) ProcessOrder(incoming *order.Order) ([]*Trade, error) {
 
 	if e.producer != nil {
 		e.producer.SendOrderEventAsync(OrderEventPut, incoming)
+	}
+
+	if e.operLogWriter != nil {
+		logData := map[string]interface{}{
+			"order_id":  incoming.ID,
+			"user_id":   incoming.UserID,
+			"market":    incoming.Market,
+			"side":      incoming.Side,
+			"type":      incoming.Type,
+			"price":     incoming.Price.String(),
+			"amount":    incoming.Amount.String(),
+			"left":      incoming.Left.String(),
+			"taker_fee": incoming.TakerFee.String(),
+		}
+		e.WriteOperLog(persist.OperLogTypeOrderCreate, logData)
 	}
 
 	trades, err := e.match(ob, incoming)
@@ -191,6 +207,19 @@ func (e *Engine) CancelOrder(orderID uint64, market string) error {
 
 	ord.Status = order.OrderStatusCanceled
 	ord.UpdateTime = time.Now()
+
+	if e.operLogWriter != nil {
+		logData := map[string]interface{}{
+			"order_id": ord.ID,
+			"user_id":  ord.UserID,
+			"market":   ord.Market,
+			"side":     ord.Side,
+			"price":    ord.Price.String(),
+			"amount":   ord.Amount.String(),
+			"left":     ord.Left.String(),
+		}
+		e.WriteOperLog(persist.OperLogTypeOrderCancel, logData)
+	}
 
 	return nil
 }
