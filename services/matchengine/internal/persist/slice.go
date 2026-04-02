@@ -30,6 +30,14 @@ type sliceInfo struct {
 	Path      string    `json:"path"`
 }
 
+type LoadedSlice struct {
+	SliceID       int64
+	Timestamp     time.Time
+	Orders        map[string][]*order.Order
+	Balances      map[string]*balance.Balance
+	LastOperLogID int64
+}
+
 func NewSliceManager(db *sqlx.DB, persister Persister, sliceInterval, sliceKeepTime time.Duration, sliceDir string) *SliceManager {
 	return &SliceManager{
 		db:            db,
@@ -46,6 +54,7 @@ func (sm *SliceManager) InitDB() error {
 			id BIGINT AUTO_INCREMENT PRIMARY KEY,
 			timestamp DATETIME NOT NULL,
 			path VARCHAR(512) NOT NULL,
+			end_oper_id BIGINT NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS slice_order (
@@ -93,9 +102,12 @@ func (sm *SliceManager) MakeSlice() error {
 		return fmt.Errorf("failed to dump balances: %w", err)
 	}
 
+	var endOperLogID int64
+	sm.db.QueryRow("SELECT COALESCE(MAX(id), 0) FROM operlog").Scan(&endOperLogID)
+
 	_, err := sm.db.Exec(
-		"INSERT INTO slice_history (timestamp, path) VALUES (?, ?)",
-		timestamp, slicePath,
+		"INSERT INTO slice_history (timestamp, path, end_oper_id) VALUES (?, ?, ?)",
+		timestamp, slicePath, endOperLogID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to record slice: %w", err)
@@ -188,36 +200,41 @@ func (sm *SliceManager) ClearOldSlices() error {
 	return nil
 }
 
-func (sm *SliceManager) LoadFromSlice() error {
+func (sm *SliceManager) LoadFromSlice() (*LoadedSlice, error) {
 	var si sliceInfo
 	err := sm.db.QueryRow(
 		"SELECT id, timestamp, path FROM slice_history ORDER BY timestamp DESC LIMIT 1",
 	).Scan(&si.ID, &si.Timestamp, &si.Path)
 
 	if err == sql.ErrNoRows {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		return fmt.Errorf("failed to find latest slice: %w", err)
+		return nil, fmt.Errorf("failed to find latest slice: %w", err)
 	}
 
-	ordersPath := filepath.Join(si.Path, "orders")
-	balancesPath := filepath.Join(si.Path, "balances")
-
-	orders, err := sm.LoadOrdersFromFile(ordersPath)
+	orders, err := sm.LoadOrdersFromFile(filepath.Join(si.Path, "orders"))
 	if err != nil {
-		return fmt.Errorf("failed to load orders: %w", err)
+		return nil, fmt.Errorf("failed to load orders: %w", err)
 	}
 
-	balances, err := sm.LoadBalancesFromFile(balancesPath)
+	balances, err := sm.LoadBalancesFromFile(filepath.Join(si.Path, "balances"))
 	if err != nil {
-		return fmt.Errorf("failed to load balances: %w", err)
+		return nil, fmt.Errorf("failed to load balances: %w", err)
 	}
 
-	_ = orders
-	_ = balances
+	var lastOperLogID int64
+	sm.db.QueryRow(
+		"SELECT COALESCE(end_oper_id, 0) FROM slice_history WHERE id = ?", si.ID,
+	).Scan(&lastOperLogID)
 
-	return nil
+	return &LoadedSlice{
+		SliceID:       si.ID,
+		Timestamp:     si.Timestamp,
+		Orders:        orders,
+		Balances:      balances,
+		LastOperLogID: lastOperLogID,
+	}, nil
 }
 
 func (sm *SliceManager) LoadOrdersFromFile(path string) (map[string][]*order.Order, error) {
