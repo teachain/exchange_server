@@ -10,7 +10,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"github.com/shopspring/decimal"
 	"github.com/spf13/viper"
 	"github.com/viabtc/go-project/services/matchengine/internal/cli"
 	"github.com/viabtc/go-project/services/matchengine/internal/engine"
@@ -47,11 +46,6 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := loadBalanceFromDB(db, e); err != nil {
-		fmt.Println("load balance failed:", err.Error())
-		os.Exit(1)
-	}
-
 	sliceInterval := viper.GetDuration("slice_interval")
 	if sliceInterval == 0 {
 		sliceInterval = time.Minute
@@ -71,10 +65,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	go sm.StartPeriodicSlices(sliceInterval, e)
-
 	operLogWriter := persist.NewOperLogWriter(db)
 	e.SetOperLogWriter(operLogWriter)
+
+	if err := InitFromDB(db, e, sm, operLogWriter); err != nil {
+		fmt.Println("init from db failed:", err.Error())
+		os.Exit(1)
+	}
+
+	go sm.StartPeriodicSlices(sliceInterval, e)
 
 	historyWriter := history.NewHistoryWriter(db, "matchengine")
 	historyWriter.Start()
@@ -109,80 +108,42 @@ func main() {
 	srv.Start(addr)
 }
 
-func loadBalanceFromDB(db *sqlx.DB, e *engine.Engine) error {
-	rows, err := db.Query("SHOW TABLES LIKE 'slice_balance_%'")
+func InitFromDB(db *sqlx.DB, e *engine.Engine, sm *persist.SliceManager, operLogWriter *persist.OperLogWriter) error {
+	loadedSlice, err := sm.LoadFromSlice()
 	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	var tableNames []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return err
-		}
-		tableNames = append(tableNames, name)
+		return fmt.Errorf("load from slice failed: %w", err)
 	}
 
-	if len(tableNames) == 0 {
-		fmt.Println("no balance snapshot tables found")
+	if loadedSlice == nil {
+		fmt.Println("no slice found, starting fresh")
 		return nil
 	}
 
-	var latestTable string
-	var latestTimestamp int64
-	for _, name := range tableNames {
-		if name == "slice_balance_example" {
-			continue
-		}
-		var ts int64
-		fmt.Sscanf(name, "slice_balance_%d", &ts)
-		if ts > latestTimestamp {
-			latestTimestamp = ts
-			latestTable = name
-		}
+	fmt.Printf("loaded slice id=%d, timestamp=%s\n", loadedSlice.SliceID, loadedSlice.Timestamp)
+
+	if err := e.LoadBalancesToEngine(loadedSlice.Balances); err != nil {
+		return fmt.Errorf("load balances failed: %w", err)
+	}
+	fmt.Printf("loaded %d balance records\n", len(loadedSlice.Balances))
+
+	if err := e.LoadOrdersToEngine(loadedSlice.Orders); err != nil {
+		return fmt.Errorf("load orders failed: %w", err)
 	}
 
-	if latestTable == "" {
-		fmt.Println("no valid balance snapshot table found")
-		return nil
+	orderCount := 0
+	for _, orders := range loadedSlice.Orders {
+		orderCount += len(orders)
+	}
+	fmt.Printf("loaded %d orders\n", orderCount)
+
+	if loadedSlice.LastOperLogID > 0 {
+		fmt.Printf("replaying operlogs from id=%d\n", loadedSlice.LastOperLogID)
+		if err := e.ReplayOperLogs(loadedSlice.LastOperLogID, operLogWriter); err != nil {
+			return fmt.Errorf("replay operlogs failed: %w", err)
+		}
+		fmt.Println("operlog replay completed")
 	}
 
-	fmt.Printf("loading balance from table: %s\n", latestTable)
-
-	query := fmt.Sprintf("SELECT user_id, asset, t, balance FROM %s", latestTable)
-	rows, err = db.Query(query)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	loaded := 0
-	for rows.Next() {
-		var userID int64
-		var asset string
-		var balType int
-		var balanceStr string
-		if err := rows.Scan(&userID, &asset, &balType, &balanceStr); err != nil {
-			return err
-		}
-
-		balance, err := decimal.NewFromString(balanceStr)
-		if err != nil {
-			continue
-		}
-
-		if balType == 0 {
-			e.SetBalance(uint32(userID), asset, balance, decimal.Zero)
-			loaded++
-		} else if balType == 1 {
-			e.SetBalance(uint32(userID), asset, balance, decimal.Zero)
-			loaded++
-		}
-	}
-
-	fmt.Printf("loaded %d balance records\n", loaded)
 	return nil
 }
 
