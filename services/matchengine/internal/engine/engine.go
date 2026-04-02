@@ -7,6 +7,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/spf13/viper"
 	"github.com/viabtc/go-project/services/matchengine/internal/balance"
+	"github.com/viabtc/go-project/services/matchengine/internal/history"
 	"github.com/viabtc/go-project/services/matchengine/internal/model"
 	"github.com/viabtc/go-project/services/matchengine/internal/order"
 	"github.com/viabtc/go-project/services/matchengine/internal/persist"
@@ -49,6 +50,7 @@ type Engine struct {
 	orderTrades   map[uint64][]*Trade
 	stopMgr       *StopManager
 	operLogWriter *persist.OperLogWriter
+	historyWriter *history.HistoryWriter
 }
 
 func NewEngine() *Engine {
@@ -347,4 +349,27 @@ func (e *Engine) GetLastPrice(market string) decimal.Decimal {
 	}
 
 	return orders[len(orders)-1].Price
+}
+
+func (e *Engine) SetHistoryWriter(hw *history.HistoryWriter) {
+	e.historyWriter = hw
+}
+
+func (e *Engine) AppendOrderHistory(o *order.Order) {
+	if e.historyWriter != nil {
+		e.historyWriter.AppendOrderHistory(o)
+	}
+}
+
+func (e *Engine) AppendOrderDealHistory(dealID uint64, t time.Time, ask, bid *order.Order, askRole, bidRole int, price, amount, deal, askFee, bidFee decimal.Decimal) {
+	if e.historyWriter != nil {
+		e.historyWriter.AppendOrderDealHistory(dealID, t, ask, bid, askRole, bidRole, price, amount, deal, askFee, bidFee)
+	}
+}
+
+func (e *Engine) AppendUserBalanceHistory(userID uint32, asset, business string, change decimal.Decimal, detail string) {
+	if e.historyWriter != nil {
+		available, _ := e.balances.GetBalance(userID, asset)
+		e.historyWriter.AppendUserBalanceHistory(userID, asset, business, change, available, detail)
+	}
 }

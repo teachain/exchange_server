@@ -13,6 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/spf13/viper"
 	"github.com/viabtc/go-project/services/matchengine/internal/engine"
+	"github.com/viabtc/go-project/services/matchengine/internal/history"
 	"github.com/viabtc/go-project/services/matchengine/internal/persist"
 	"github.com/viabtc/go-project/services/matchengine/internal/server"
 )
@@ -73,6 +74,10 @@ func main() {
 
 	operLogWriter := persist.NewOperLogWriter(db)
 	e.SetOperLogWriter(operLogWriter)
+
+	historyWriter := history.NewHistoryWriter(db, "matchengine")
+	historyWriter.Start()
+	e.SetHistoryWriter(historyWriter)
 
 	startStopOrderCron(e)
 

@@ -61,6 +61,11 @@ func (e *Engine) ProcessOrder(incoming *order.Order) ([]*Trade, error) {
 	}
 
 	trades, err := e.match(ob, incoming)
+
+	if incoming.Status == order.OrderStatusFinished || incoming.Status == order.OrderStatusCanceled {
+		e.AppendOrderHistory(incoming)
+	}
+
 	return trades, err
 }
 
@@ -220,6 +225,8 @@ func (e *Engine) CancelOrder(orderID uint64, market string) error {
 		}
 		e.WriteOperLog(persist.OperLogTypeOrderCancel, logData)
 	}
+
+	e.AppendOrderHistory(ord)
 
 	return nil
 }
