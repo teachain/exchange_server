@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"sync"
@@ -53,6 +54,82 @@ type Engine struct {
 	stopMgr       *StopManager
 	operLogWriter *persist.OperLogWriter
 	historyWriter *history.HistoryWriter
+}
+
+type OperLogReplayHandler struct {
+	engine *Engine
+}
+
+func (h *OperLogReplayHandler) HandleOrderCreate(data []byte) error {
+	var logData struct {
+		OrderID  uint64 `json:"order_id"`
+		UserID   uint32 `json:"user_id"`
+		Market   string `json:"market"`
+		Side     uint8  `json:"side"`
+		Type     uint8  `json:"type"`
+		Price    string `json:"price"`
+		Amount   string `json:"amount"`
+		Left     string `json:"left"`
+		TakerFee string `json:"taker_fee"`
+	}
+	if err := json.Unmarshal(data, &logData); err != nil {
+		return err
+	}
+
+	price, _ := decimal.NewFromString(logData.Price)
+	amount, _ := decimal.NewFromString(logData.Amount)
+	left, _ := decimal.NewFromString(logData.Left)
+	takerFee, _ := decimal.NewFromString(logData.TakerFee)
+
+	ord := &order.Order{
+		ID:       logData.OrderID,
+		UserID:   logData.UserID,
+		Market:   logData.Market,
+		Side:     order.Side(logData.Side),
+		Type:     order.OrderType(logData.Type),
+		Price:    price,
+		Amount:   amount,
+		Left:     left,
+		TakerFee: takerFee,
+		Status:   order.OrderStatusPending,
+	}
+
+	_, err := h.engine.PutOrderNoLock(ord)
+	return err
+}
+
+func (h *OperLogReplayHandler) HandleOrderDeal(data []byte) error {
+	return nil
+}
+
+func (h *OperLogReplayHandler) HandleOrderCancel(data []byte) error {
+	var logData struct {
+		OrderID uint64 `json:"order_id"`
+		UserID  uint32 `json:"user_id"`
+		Market  string `json:"market"`
+	}
+	if err := json.Unmarshal(data, &logData); err != nil {
+		return err
+	}
+
+	h.engine.mu.Lock()
+	defer h.engine.mu.Unlock()
+
+	ob, ok := h.engine.orderBooks[logData.Market]
+	if !ok {
+		return nil
+	}
+	ord, ok := ob.GetOrder(logData.OrderID)
+	if !ok {
+		return nil
+	}
+	ob.Remove(logData.OrderID)
+	ord.Status = order.OrderStatusCanceled
+	return nil
+}
+
+func (h *OperLogReplayHandler) HandleBalanceChange(data []byte) error {
+	return nil
 }
 
 func NewEngine() *Engine {
@@ -319,6 +396,11 @@ func (e *Engine) WriteOperLog(logType persist.OperLogType, data interface{}) {
 		}
 		e.operLogWriter.Write(log)
 	}
+}
+
+func (e *Engine) ReplayOperLogs(fromID int64, operLogWriter *persist.OperLogWriter) error {
+	handler := &OperLogReplayHandler{engine: e}
+	return operLogWriter.Replay(fromID, handler)
 }
 
 func (e *Engine) GetAllOrders() map[string][]*order.Order {
