@@ -19,9 +19,7 @@ const (
 )
 
 func (e *Engine) ProcessOrder(incoming *order.Order) ([]*Trade, error) {
-	println("ProcessOrder: acquiring lock")
 	e.mu.Lock()
-	println("ProcessOrder: lock acquired")
 	defer e.mu.Unlock()
 
 	market, ok := e.getMarketLocked(incoming.Market)
@@ -31,7 +29,7 @@ func (e *Engine) ProcessOrder(incoming *order.Order) ([]*Trade, error) {
 
 	ob := e.GetOrCreateOrderBookWithLock(incoming.Market)
 
-	if incoming.Side == order.SideBuy {
+	if incoming.Side == order.SideBid {
 		cost := incoming.Price.Mul(incoming.Amount)
 		if err := e.balances.LockBalance(incoming.UserID, market.Money, cost); err != nil {
 			return nil, err
@@ -42,42 +40,32 @@ func (e *Engine) ProcessOrder(incoming *order.Order) ([]*Trade, error) {
 		}
 	}
 
-	println("ProcessOrder: balance locked, about to match")
-
 	if e.producer != nil {
 		e.producer.SendOrderEventAsync(OrderEventPut, incoming)
 	}
 
 	trades, err := e.match(ob, incoming)
-	println("ProcessOrder: match finished, err=", err)
 	return trades, err
 }
 
 func (e *Engine) match(ob *order.OrderBook, incoming *order.Order) ([]*Trade, error) {
 	var trades []*Trade
 
-	println("match: incoming side=", incoming.Side, "price=", incoming.Price.String())
-
-	if incoming.Side == order.SideBuy {
-		println("match: matching against Asks, len=", ob.Asks.Len())
+	if incoming.Side == order.SideBid {
 		trades = e.matchAsTaker(incoming, ob.Asks, ob)
 	} else {
-		println("match: matching against Bids, len=", ob.Bids.Len())
 		trades = e.matchAsTaker(incoming, ob.Bids, ob)
 	}
 
-	println("match: finished, trades=", len(trades))
-
-	if incoming.Deal.LessThan(incoming.Amount) {
+	if incoming.Left.LessThan(incoming.Amount) && incoming.Left.IsPositive() {
 		incoming.Status = order.OrderStatusPartial
-		if incoming.Deal.IsZero() {
+		if incoming.Left.Equal(incoming.Amount) {
 			incoming.Status = order.OrderStatusPending
 		}
 		ob.Add(incoming)
 	} else {
-		incoming.Status = order.OrderStatusFilled
-		now := time.Now()
-		incoming.FinishedAt = &now
+		incoming.Status = order.OrderStatusFinished
+		incoming.UpdateTime = time.Now()
 	}
 
 	return trades, nil
@@ -86,18 +74,18 @@ func (e *Engine) match(ob *order.OrderBook, incoming *order.Order) ([]*Trade, er
 func (e *Engine) matchAsTaker(incoming *order.Order, makerQueue *order.PriceQueue, ob *order.OrderBook) []*Trade {
 	var trades []*Trade
 
-	for makerQueue.Len() > 0 && incoming.Deal.LessThan(incoming.Amount) {
+	for makerQueue.Len() > 0 && incoming.Left.IsPositive() {
 		maker := makerQueue.Orders[0]
 
-		if incoming.Side == order.SideBuy && maker.Price.GreaterThan(incoming.Price) {
+		if incoming.Side == order.SideBid && maker.Price.GreaterThan(incoming.Price) {
 			break
 		}
-		if incoming.Side == order.SideSell && maker.Price.LessThan(incoming.Price) {
+		if incoming.Side == order.SideAsk && maker.Price.LessThan(incoming.Price) {
 			break
 		}
 
-		remainingAmount := incoming.Amount.Sub(incoming.Deal)
-		makerRemaining := maker.Amount.Sub(maker.Deal)
+		remainingAmount := incoming.Left
+		makerRemaining := maker.Left
 		tradeAmount := decimal.Min(remainingAmount, makerRemaining)
 		tradePrice := maker.Price
 
@@ -117,12 +105,12 @@ func (e *Engine) matchAsTaker(incoming *order.Order, makerQueue *order.PriceQueu
 		}
 		trades = append(trades, trade)
 
-		incoming.Deal = incoming.Deal.Add(tradeAmount)
-		maker.Deal = maker.Deal.Add(tradeAmount)
+		incoming.Left = incoming.Left.Sub(tradeAmount)
+		maker.Left = maker.Left.Sub(tradeAmount)
 
 		e.settleTrade(trade)
 
-		if maker.Deal.GreaterThanOrEqual(maker.Amount) {
+		if maker.Left.IsZero() || maker.Left.IsNegative() {
 			heap.Pop(makerQueue)
 			ob.Remove(maker.ID)
 		}
@@ -143,7 +131,7 @@ func (e *Engine) settleTrade(trade *Trade) {
 
 	e.AddTradeToOrder(trade)
 
-	if trade.Side == order.SideBuy {
+	if trade.Side == order.SideBid {
 		cost := trade.Price.Mul(trade.Amount)
 		e.balances.DeductBalance(trade.TakerUserID, market.Money, cost)
 		e.balances.AddBalance(trade.MakerUserID, market.Money, cost.Sub(trade.MakerFee))
@@ -165,7 +153,7 @@ func (e *Engine) settleTrade(trade *Trade) {
 	}
 }
 
-func (e *Engine) CancelOrder(orderID int64, market string) error {
+func (e *Engine) CancelOrder(orderID uint64, market string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -190,16 +178,15 @@ func (e *Engine) CancelOrder(orderID int64, market string) error {
 		return nil
 	}
 
-	remaining := ord.Amount.Sub(ord.Deal)
-	if ord.Side == order.SideBuy {
+	remaining := ord.Left
+	if ord.Side == order.SideBid {
 		e.balances.UnlockBalance(ord.UserID, marketConfig.Money, ord.Price.Mul(remaining))
 	} else {
 		e.balances.UnlockBalance(ord.UserID, marketConfig.Stock, remaining)
 	}
 
-	now := time.Now()
-	ord.Status = order.OrderStatusCancelled
-	ord.FinishedAt = &now
+	ord.Status = order.OrderStatusCanceled
+	ord.UpdateTime = time.Now()
 
 	return nil
 }

@@ -15,10 +15,10 @@ var (
 )
 
 type Balance struct {
-	UserID  int64
-	Asset   string
-	Balance decimal.Decimal
-	Frozen  decimal.Decimal
+	UserID    uint32
+	Asset     string
+	Available decimal.Decimal
+	Frozen    decimal.Decimal
 }
 
 type BalanceManager struct {
@@ -32,11 +32,11 @@ func NewBalanceManager() *BalanceManager {
 	}
 }
 
-func (bm *BalanceManager) key(userID int64, asset string) string {
+func (bm *BalanceManager) key(userID uint32, asset string) string {
 	return fmt.Sprintf("%d:%s", userID, asset)
 }
 
-func (bm *BalanceManager) GetBalance(userID int64, asset string) (decimal.Decimal, decimal.Decimal) {
+func (bm *BalanceManager) GetBalance(userID uint32, asset string) (decimal.Decimal, decimal.Decimal) {
 	bm.mu.RLock()
 	defer bm.mu.RUnlock()
 
@@ -44,10 +44,10 @@ func (bm *BalanceManager) GetBalance(userID int64, asset string) (decimal.Decima
 	if !ok {
 		return decimal.Zero, decimal.Zero
 	}
-	return b.Balance, b.Frozen
+	return b.Available, b.Frozen
 }
 
-func (bm *BalanceManager) LockBalance(userID int64, asset string, amount decimal.Decimal) error {
+func (bm *BalanceManager) Freeze(userID uint32, asset string, amount decimal.Decimal) error {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 
@@ -57,16 +57,17 @@ func (bm *BalanceManager) LockBalance(userID int64, asset string, amount decimal
 		return ErrInsufficientBalance
 	}
 
-	available := b.Balance.Sub(b.Frozen)
+	available := b.Available
 	if available.LessThan(amount) {
 		return ErrInsufficientBalance
 	}
 
+	b.Available = b.Available.Sub(amount)
 	b.Frozen = b.Frozen.Add(amount)
 	return nil
 }
 
-func (bm *BalanceManager) UnlockBalance(userID int64, asset string, amount decimal.Decimal) error {
+func (bm *BalanceManager) Unfreeze(userID uint32, asset string, amount decimal.Decimal) error {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 
@@ -81,10 +82,19 @@ func (bm *BalanceManager) UnlockBalance(userID int64, asset string, amount decim
 	}
 
 	b.Frozen = b.Frozen.Sub(amount)
+	b.Available = b.Available.Add(amount)
 	return nil
 }
 
-func (bm *BalanceManager) DeductBalance(userID int64, asset string, amount decimal.Decimal) error {
+func (bm *BalanceManager) LockBalance(userID uint32, asset string, amount decimal.Decimal) error {
+	return bm.Freeze(userID, asset, amount)
+}
+
+func (bm *BalanceManager) UnlockBalance(userID uint32, asset string, amount decimal.Decimal) error {
+	return bm.Unfreeze(userID, asset, amount)
+}
+
+func (bm *BalanceManager) Sub(userID uint32, asset string, amount decimal.Decimal) error {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 
@@ -94,15 +104,15 @@ func (bm *BalanceManager) DeductBalance(userID int64, asset string, amount decim
 		return ErrBalanceNotFound
 	}
 
-	if b.Balance.LessThan(amount) {
+	if b.Available.LessThan(amount) {
 		return ErrInsufficientBalance
 	}
 
-	b.Balance = b.Balance.Sub(amount)
+	b.Available = b.Available.Sub(amount)
 	return nil
 }
 
-func (bm *BalanceManager) AddBalance(userID int64, asset string, amount decimal.Decimal) {
+func (bm *BalanceManager) Add(userID uint32, asset string, amount decimal.Decimal) error {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 
@@ -110,31 +120,40 @@ func (bm *BalanceManager) AddBalance(userID int64, asset string, amount decimal.
 	b, ok := bm.balances[k]
 	if !ok {
 		bm.balances[k] = &Balance{
-			UserID:  userID,
-			Asset:   asset,
-			Balance: amount,
-			Frozen:  decimal.Zero,
+			UserID:    userID,
+			Asset:     asset,
+			Available: amount,
+			Frozen:    decimal.Zero,
 		}
-		return
+		return nil
 	}
 
-	b.Balance = b.Balance.Add(amount)
+	b.Available = b.Available.Add(amount)
+	return nil
 }
 
-func (bm *BalanceManager) SetBalance(userID int64, asset string, balance, frozen decimal.Decimal) {
+func (bm *BalanceManager) DeductBalance(userID uint32, asset string, amount decimal.Decimal) error {
+	return bm.Sub(userID, asset, amount)
+}
+
+func (bm *BalanceManager) AddBalance(userID uint32, asset string, amount decimal.Decimal) {
+	bm.Add(userID, asset, amount)
+}
+
+func (bm *BalanceManager) SetBalance(userID uint32, asset string, available, frozen decimal.Decimal) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 
 	k := bm.key(userID, asset)
 	bm.balances[k] = &Balance{
-		UserID:  userID,
-		Asset:   asset,
-		Balance: balance,
-		Frozen:  frozen,
+		UserID:    userID,
+		Asset:     asset,
+		Available: available,
+		Frozen:    frozen,
 	}
 }
 
-func (bm *BalanceManager) GetAllBalancesForUser(userID int64) map[string]*Balance {
+func (bm *BalanceManager) GetAllBalancesForUser(userID uint32) map[string]*Balance {
 	bm.mu.RLock()
 	defer bm.mu.RUnlock()
 

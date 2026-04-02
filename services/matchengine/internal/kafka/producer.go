@@ -82,7 +82,7 @@ func (p *Producer) SendDealEvent(trade *engine.Trade) error {
 	})
 }
 
-func (p *Producer) SendBalanceUpdate(userID int64, asset string, change decimal.Decimal) error {
+func (p *Producer) SendBalanceUpdate(userID uint32, asset string, change decimal.Decimal) error {
 	msg := []interface{}{
 		"balance_update",
 		userID,
@@ -122,7 +122,7 @@ func (p *Producer) SendDealEventAsync(trade *engine.Trade) {
 	}()
 }
 
-func (p *Producer) SendBalanceUpdateAsync(userID int64, asset string, change decimal.Decimal) {
+func (p *Producer) SendBalanceUpdateAsync(userID uint32, asset string, change decimal.Decimal) {
 	go func() {
 		if err := p.SendBalanceUpdate(userID, asset, change); err != nil {
 			log.Printf("failed to send balance update: %v", err)

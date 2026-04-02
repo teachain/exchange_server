@@ -25,11 +25,11 @@ const (
 )
 
 type OrderInfo struct {
-	ID         int64             `json:"id"`
+	ID         uint64            `json:"order_id"`
 	Market     string            `json:"market"`
 	Side       order.Side        `json:"side"`
 	Type       int               `json:"type"`
-	UserID     int64             `json:"user"`
+	UserID     uint32            `json:"user"`
 	Price      decimal.Decimal   `json:"price"`
 	Amount     decimal.Decimal   `json:"amount"`
 	TakerFee   decimal.Decimal   `json:"taker_fee"`
@@ -45,11 +45,11 @@ type OrderInfo struct {
 }
 
 type TradeInfo struct {
-	ID           int64           `json:"id"`
-	TakerOrderID int64           `json:"taker_order_id"`
-	MakerOrderID int64           `json:"maker_order_id"`
-	TakerUserID  int64           `json:"taker_user_id"`
-	MakerUserID  int64           `json:"maker_user_id"`
+	ID           uint64          `json:"id"`
+	TakerOrderID uint64          `json:"taker_order_id"`
+	MakerOrderID uint64          `json:"maker_order_id"`
+	TakerUserID  uint32          `json:"taker_user_id"`
+	MakerUserID  uint32          `json:"maker_user_id"`
 	Market       string          `json:"market"`
 	Side         order.Side      `json:"side"`
 	Price        decimal.Decimal `json:"price"`
@@ -60,15 +60,15 @@ type TradeInfo struct {
 }
 
 type DealRecord struct {
-	ID          int64           `json:"id"`
+	ID          uint64          `json:"id"`
 	Time        float64         `json:"time"`
-	User        int64           `json:"user"`
+	User        uint32          `json:"user"`
 	Role        int             `json:"role"`
 	Amount      decimal.Decimal `json:"amount"`
 	Price       decimal.Decimal `json:"price"`
 	Deal        decimal.Decimal `json:"deal"`
 	Fee         decimal.Decimal `json:"fee"`
-	DealOrderID int64           `json:"deal_order_id"`
+	DealOrderID uint64          `json:"deal_order_id"`
 }
 
 type DepthLevel struct {
@@ -77,7 +77,7 @@ type DepthLevel struct {
 }
 
 func orderToInfo(o *order.Order) OrderInfo {
-	left := o.Amount.Sub(o.Deal)
+	left := o.Amount.Sub(o.Left)
 	return OrderInfo{
 		ID:         o.ID,
 		Market:     o.Market,
@@ -86,14 +86,14 @@ func orderToInfo(o *order.Order) OrderInfo {
 		UserID:     o.UserID,
 		Price:      o.Price,
 		Amount:     o.Amount,
-		TakerFee:   o.Fee,
+		TakerFee:   o.DealFee,
 		MakerFee:   decimal.Zero,
 		Left:       left,
-		DealStock:  o.Deal,
-		DealMoney:  o.Price.Mul(o.Deal),
-		DealFee:    o.Fee,
+		DealStock:  o.Left,
+		DealMoney:  o.Price.Mul(o.Left),
+		DealFee:    o.DealFee,
 		Status:     o.Status,
-		CreateTime: float64(o.CreatedAt.Unix()),
+		CreateTime: float64(o.CreateTime.Unix()),
 		UpdateTime: float64(time.Now().Unix()),
 	}
 }
@@ -140,7 +140,7 @@ func HandleOrderPutLimit(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error
 		return nil, fmt.Errorf("invalid side")
 	}
 	side := order.Side(int(sideVal))
-	if side != order.SideBuy && side != order.SideSell {
+	if side != order.SideBid && side != order.SideAsk {
 		return nil, fmt.Errorf("invalid side value")
 	}
 
@@ -184,52 +184,53 @@ func HandleOrderPutLimit(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error
 
 	eng := s.GetEngine()
 
-	if side == order.SideBuy {
+	if side == order.SideBid {
 		frozen := price.Mul(amount)
-		err = eng.GetBalances().LockBalance(int64(userID), market, frozen)
+		err = eng.GetBalances().LockBalance(uint32(userID), market, frozen)
 		if err != nil {
 			return nil, fmt.Errorf("balance not enough")
 		}
 	} else {
-		err = eng.GetBalances().LockBalance(int64(userID), market, amount)
+		err = eng.GetBalances().LockBalance(uint32(userID), market, amount)
 		if err != nil {
 			return nil, fmt.Errorf("balance not enough")
 		}
 	}
 
 	incoming := &order.Order{
-		ID:        eng.NextID(),
-		UserID:    int64(userID),
-		Market:    market,
-		Side:      side,
-		Price:     price,
-		Amount:    amount,
-		Deal:      decimal.Zero,
-		Fee:       takerFee,
-		Status:    order.OrderStatusPending,
-		CreatedAt: time.Now(),
+		ID:         eng.NextID(),
+		UserID:     uint32(userID),
+		Market:     market,
+		Side:       side,
+		Price:      price,
+		Amount:     amount,
+		Left:       amount,
+		TakerFee:   takerFee,
+		Status:     order.OrderStatusPending,
+		CreateTime: time.Now(),
+		UpdateTime: time.Now(),
 	}
 
 	trades, err := eng.ProcessOrder(incoming)
 	if err != nil {
-		if side == order.SideBuy {
+		if side == order.SideBid {
 			frozen := price.Mul(amount)
-			eng.GetBalances().UnlockBalance(int64(userID), market, frozen)
+			eng.GetBalances().UnlockBalance(uint32(userID), market, frozen)
 		} else {
-			eng.GetBalances().UnlockBalance(int64(userID), market, amount)
+			eng.GetBalances().UnlockBalance(uint32(userID), market, amount)
 		}
 		return nil, fmt.Errorf("process order failed")
 	}
 
-	if incoming.Deal.IsZero() {
+	if incoming.Left.IsZero() {
 	} else {
-		if side == order.SideBuy {
+		if side == order.SideBid {
 			frozen := price.Mul(amount)
-			spent := price.Mul(incoming.Deal)
-			eng.GetBalances().UnlockBalance(int64(userID), market, frozen.Sub(spent))
+			spent := price.Mul(incoming.Left)
+			eng.GetBalances().UnlockBalance(uint32(userID), market, frozen.Sub(spent))
 		} else {
-			spent := incoming.Deal
-			eng.GetBalances().UnlockBalance(int64(userID), market, amount.Sub(spent))
+			spent := incoming.Left
+			eng.GetBalances().UnlockBalance(uint32(userID), market, amount.Sub(spent))
 		}
 	}
 
@@ -266,7 +267,7 @@ func HandleOrderPutMarket(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, erro
 		return nil, fmt.Errorf("invalid side")
 	}
 	side := order.Side(int(sideVal))
-	if side != order.SideBuy && side != order.SideSell {
+	if side != order.SideBid && side != order.SideAsk {
 		return nil, fmt.Errorf("invalid side value")
 	}
 
@@ -298,58 +299,59 @@ func HandleOrderPutMarket(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, erro
 	}
 
 	var marketPrice decimal.Decimal
-	if side == order.SideBuy && ob.Asks.Len() > 0 {
+	if side == order.SideBid && ob.Asks.Len() > 0 {
 		marketPrice = ob.Asks.Orders[0].Price
-	} else if side == order.SideSell && ob.Bids.Len() > 0 {
+	} else if side == order.SideAsk && ob.Bids.Len() > 0 {
 		marketPrice = ob.Bids.Orders[0].Price
 	} else {
 		return nil, fmt.Errorf("no enough trader")
 	}
 
-	if side == order.SideBuy {
+	if side == order.SideBid {
 		frozen := marketPrice.Mul(amount)
-		err = eng.GetBalances().LockBalance(int64(userID), market, frozen)
+		err = eng.GetBalances().LockBalance(uint32(userID), market, frozen)
 		if err != nil {
 			return nil, fmt.Errorf("balance not enough")
 		}
 	} else {
-		err = eng.GetBalances().LockBalance(int64(userID), market, amount)
+		err = eng.GetBalances().LockBalance(uint32(userID), market, amount)
 		if err != nil {
 			return nil, fmt.Errorf("balance not enough")
 		}
 	}
 
 	incoming := &order.Order{
-		ID:        eng.NextID(),
-		UserID:    int64(userID),
-		Market:    market,
-		Side:      side,
-		Price:     marketPrice,
-		Amount:    amount,
-		Deal:      decimal.Zero,
-		Fee:       takerFee,
-		Status:    order.OrderStatusPending,
-		CreatedAt: time.Now(),
+		ID:         eng.NextID(),
+		UserID:     uint32(userID),
+		Market:     market,
+		Side:       side,
+		Price:      marketPrice,
+		Amount:     amount,
+		Left:       amount,
+		TakerFee:   takerFee,
+		Status:     order.OrderStatusPending,
+		CreateTime: time.Now(),
+		UpdateTime: time.Now(),
 	}
 
 	trades, err := eng.ProcessOrder(incoming)
 	if err != nil {
-		if side == order.SideBuy {
+		if side == order.SideBid {
 			frozen := marketPrice.Mul(amount)
-			eng.GetBalances().UnlockBalance(int64(userID), market, frozen)
+			eng.GetBalances().UnlockBalance(uint32(userID), market, frozen)
 		} else {
-			eng.GetBalances().UnlockBalance(int64(userID), market, amount)
+			eng.GetBalances().UnlockBalance(uint32(userID), market, amount)
 		}
 		return nil, fmt.Errorf("process order failed")
 	}
 
-	if side == order.SideBuy {
+	if side == order.SideBid {
 		frozen := marketPrice.Mul(amount)
-		spent := marketPrice.Mul(incoming.Deal)
-		eng.GetBalances().UnlockBalance(int64(userID), market, frozen.Sub(spent))
+		spent := marketPrice.Mul(incoming.Left)
+		eng.GetBalances().UnlockBalance(uint32(userID), market, frozen.Sub(spent))
 	} else {
-		spent := incoming.Deal
-		eng.GetBalances().UnlockBalance(int64(userID), market, amount.Sub(spent))
+		spent := incoming.Left
+		eng.GetBalances().UnlockBalance(uint32(userID), market, amount.Sub(spent))
 	}
 
 	result := map[string]interface{}{
@@ -409,7 +411,7 @@ func HandleOrderQuery(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) {
 	orders := ob.GetOrders()
 	var userOrders []*order.Order
 	for _, o := range orders {
-		if o.UserID == int64(userID) && o.Status != order.OrderStatusCancelled {
+		if o.UserID == uint32(userID) && o.Status != order.OrderStatusCanceled {
 			userOrders = append(userOrders, o)
 		}
 	}
@@ -465,21 +467,21 @@ func HandleOrderCancel(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) 
 	}
 
 	eng := s.GetEngine()
-	ord, found := eng.GetOrder(int64(orderID))
+	ord, found := eng.GetOrder(uint64(orderID))
 	if !found {
 		return nil, fmt.Errorf("order not found")
 	}
 
-	if ord.UserID != int64(userID) {
+	if ord.UserID != uint32(userID) {
 		return nil, fmt.Errorf("user not match")
 	}
 
-	err := eng.CancelOrder(int64(orderID), market)
+	err := eng.CancelOrder(uint64(orderID), market)
 	if err != nil {
 		return nil, fmt.Errorf("cancel order failed")
 	}
 
-	updated, found := eng.GetOrder(int64(orderID))
+	updated, found := eng.GetOrder(uint64(orderID))
 	if !found {
 		return nil, fmt.Errorf("order not found after cancel")
 	}
@@ -511,7 +513,7 @@ func HandleOrderBook(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) {
 		return nil, fmt.Errorf("invalid side")
 	}
 	side := order.Side(int(sideVal))
-	if side != order.SideBuy && side != order.SideSell {
+	if side != order.SideBid && side != order.SideAsk {
 		return nil, fmt.Errorf("invalid side value")
 	}
 
@@ -543,7 +545,7 @@ func HandleOrderBook(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) {
 
 	var orders []*order.Order
 	var total int
-	if side == order.SideBuy {
+	if side == order.SideBid {
 		orders = ob.Bids.Orders
 		total = len(orders)
 	} else {
@@ -648,7 +650,7 @@ func getDepthWithInterval(orders []*order.Order, limit int, interval decimal.Dec
 			}
 		}
 		priceStr := price.String()
-		left := o.Amount.Sub(o.Deal)
+		left := o.Amount.Sub(o.Left)
 		levels[priceStr] = levels[priceStr].Add(left)
 	}
 
@@ -685,7 +687,7 @@ func HandleOrderDetail(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) 
 	}
 
 	eng := s.GetEngine()
-	ord, found := eng.GetOrder(int64(orderID))
+	ord, found := eng.GetOrder(uint64(orderID))
 	if !found || ord.Market != market {
 		return json.Marshal(nil)
 	}
@@ -742,7 +744,7 @@ func HandleOrderHistory(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error)
 	orders := ob.GetOrders()
 	var finishedOrders []*order.Order
 	for _, o := range orders {
-		if o.UserID == int64(userID) && (o.Status == order.OrderStatusFilled || o.Status == order.OrderStatusCancelled) {
+		if o.UserID == uint32(userID) && (o.Status == order.OrderStatusFinished || o.Status == order.OrderStatusCanceled) {
 			finishedOrders = append(finishedOrders, o)
 		}
 	}
@@ -802,17 +804,17 @@ func HandleOrderDeals(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) {
 	}
 
 	eng := s.GetEngine()
-	trades, total := eng.GetOrderTrades(int64(orderID), int(offset), int(limit))
+	trades, total := eng.GetOrderTrades(uint64(orderID), int(offset), int(limit))
 
 	records := make([]DealRecord, 0, len(trades))
 	for _, t := range trades {
-		var userID int64
+		var userID uint32
 		var role int
 		var dealAmount decimal.Decimal
 		var fee decimal.Decimal
-		var dealOrderID int64
+		var dealOrderID uint64
 
-		if t.TakerOrderID == int64(orderID) {
+		if t.TakerOrderID == uint64(orderID) {
 			userID = t.TakerUserID
 			role = 2
 			dealAmount = t.Amount
@@ -870,12 +872,12 @@ func HandleOrderDetailFinished(s *server.RPCServer, pkg *server.RPCPkg) ([]byte,
 	}
 
 	eng := s.GetEngine()
-	ord, found := eng.GetOrder(int64(orderID))
+	ord, found := eng.GetOrder(uint64(orderID))
 	if !found || ord.Market != market {
 		return json.Marshal(nil)
 	}
 
-	if ord.Status != order.OrderStatusFilled && ord.Status != order.OrderStatusCancelled {
+	if ord.Status != order.OrderStatusFinished && ord.Status != order.OrderStatusCanceled {
 		return json.Marshal(nil)
 	}
 

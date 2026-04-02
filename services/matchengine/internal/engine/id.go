@@ -4,7 +4,7 @@ import "sync"
 
 type IDGenerator struct {
 	mu    sync.Mutex
-	value int64
+	value uint64
 }
 
 func NewIDGenerator() *IDGenerator {
@@ -13,7 +13,7 @@ func NewIDGenerator() *IDGenerator {
 	}
 }
 
-func (g *IDGenerator) NextID() int64 {
+func (g *IDGenerator) NextID() uint64 {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.value++

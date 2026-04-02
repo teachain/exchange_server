@@ -129,10 +129,10 @@ func loadBalanceFromDB(db *sql.DB, e *engine.Engine) error {
 		}
 
 		if balType == 0 {
-			e.SetBalance(userID, asset, balance, decimal.Zero)
+			e.SetBalance(uint32(userID), asset, balance, decimal.Zero)
 			loaded++
 		} else if balType == 1 {
-			e.SetBalance(userID, asset, balance, decimal.Zero)
+			e.SetBalance(uint32(userID), asset, balance, decimal.Zero)
 			loaded++
 		}
 	}

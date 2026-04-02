@@ -11,14 +11,14 @@ type OrderBook struct {
 	mu     sync.RWMutex
 	Bids   *PriceQueue
 	Asks   *PriceQueue
-	orders map[int64]*Order
+	orders map[uint64]*Order
 }
 
 func NewOrderBook() *OrderBook {
 	return &OrderBook{
 		Bids:   NewPriceQueue(),
 		Asks:   NewPriceQueue(),
-		orders: make(map[int64]*Order),
+		orders: make(map[uint64]*Order),
 	}
 }
 
@@ -29,21 +29,21 @@ func (ob *OrderBook) Add(order *Order) {
 	ob.orders[order.ID] = order
 
 	pq := ob.Bids
-	if order.Side == SideSell {
+	if order.Side == SideAsk {
 		pq = ob.Asks
 	}
 
 	heap.Push(pq, order)
 }
 
-func (ob *OrderBook) Remove(orderID int64) {
+func (ob *OrderBook) Remove(orderID uint64) {
 	ob.mu.Lock()
 	defer ob.mu.Unlock()
 
 	delete(ob.orders, orderID)
 }
 
-func (ob *OrderBook) GetOrder(orderID int64) (*Order, bool) {
+func (ob *OrderBook) GetOrder(orderID uint64) (*Order, bool) {
 	ob.mu.RLock()
 	defer ob.mu.RUnlock()
 
@@ -92,14 +92,14 @@ func (ob *OrderBook) GetDepth(limit int, side Side) []DepthLevel {
 	defer ob.mu.RUnlock()
 
 	pq := ob.Bids
-	if side == SideSell {
+	if side == SideAsk {
 		pq = ob.Asks
 	}
 
 	levels := make(map[string]decimal.Decimal)
 	for _, o := range pq.Orders {
 		priceStr := o.Price.String()
-		levels[priceStr] = levels[priceStr].Add(o.Amount.Sub(o.Deal))
+		levels[priceStr] = levels[priceStr].Add(o.Left)
 	}
 
 	result := make([]DepthLevel, 0, len(levels))

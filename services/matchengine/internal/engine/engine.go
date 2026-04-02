@@ -12,11 +12,11 @@ import (
 )
 
 type Trade struct {
-	ID           int64           `json:"id"`
-	TakerOrderID int64           `json:"taker_order_id"`
-	MakerOrderID int64           `json:"maker_order_id"`
-	TakerUserID  int64           `json:"taker_user_id"`
-	MakerUserID  int64           `json:"maker_user_id"`
+	ID           uint64          `json:"id"`
+	TakerOrderID uint64          `json:"taker_order_id"`
+	MakerOrderID uint64          `json:"maker_order_id"`
+	TakerUserID  uint32          `json:"taker_user_id"`
+	MakerUserID  uint32          `json:"maker_user_id"`
 	Market       string          `json:"market"`
 	Side         order.Side      `json:"side"`
 	Price        decimal.Decimal `json:"price"`
@@ -29,10 +29,10 @@ type Trade struct {
 type Producer interface {
 	SendOrderEvent(event int, order *order.Order) error
 	SendDealEvent(trade *Trade) error
-	SendBalanceUpdate(userID int64, asset string, change decimal.Decimal) error
+	SendBalanceUpdate(userID uint32, asset string, change decimal.Decimal) error
 	SendOrderEventAsync(event int, order *order.Order)
 	SendDealEventAsync(trade *Trade)
-	SendBalanceUpdateAsync(userID int64, asset string, change decimal.Decimal)
+	SendBalanceUpdateAsync(userID uint32, asset string, change decimal.Decimal)
 }
 
 type Engine struct {
@@ -45,7 +45,7 @@ type Engine struct {
 	markets     map[string]*model.MarketConfig
 	assets      map[string]*model.AssetConfig
 	producer    Producer
-	orderTrades map[int64][]*Trade
+	orderTrades map[uint64][]*Trade
 }
 
 func NewEngine() *Engine {
@@ -57,7 +57,7 @@ func NewEngine() *Engine {
 		idGenerator: NewIDGenerator(),
 		markets:     make(map[string]*model.MarketConfig),
 		assets:      make(map[string]*model.AssetConfig),
-		orderTrades: make(map[int64][]*Trade),
+		orderTrades: make(map[uint64][]*Trade),
 	}
 	e.LoadConfig()
 	return e
@@ -132,7 +132,7 @@ func (e *Engine) GetOrderBook(market string) (*order.OrderBook, bool) {
 	return ob, ok
 }
 
-func (e *Engine) GetOrder(orderID int64) (*order.Order, bool) {
+func (e *Engine) GetOrder(orderID uint64) (*order.Order, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -144,19 +144,19 @@ func (e *Engine) GetOrder(orderID int64) (*order.Order, bool) {
 	return nil, false
 }
 
-func (e *Engine) NextID() int64 {
+func (e *Engine) NextID() uint64 {
 	return e.idGenerator.NextID()
 }
 
-func (e *Engine) GetBalance(userID int64, asset string) (decimal.Decimal, decimal.Decimal) {
+func (e *Engine) GetBalance(userID uint32, asset string) (decimal.Decimal, decimal.Decimal) {
 	return e.balances.GetBalance(userID, asset)
 }
 
-func (e *Engine) SetBalance(userID int64, asset string, balance, frozen decimal.Decimal) {
+func (e *Engine) SetBalance(userID uint32, asset string, balance, frozen decimal.Decimal) {
 	e.balances.SetBalance(userID, asset, balance, frozen)
 }
 
-func (e *Engine) GetAllBalancesForUser(userID int64) map[string]*balance.Balance {
+func (e *Engine) GetAllBalancesForUser(userID uint32) map[string]*balance.Balance {
 	return e.balances.GetAllBalancesForUser(userID)
 }
 
@@ -214,7 +214,7 @@ func (e *Engine) AddTradeToOrder(trade *Trade) {
 	e.orderTrades[trade.MakerOrderID] = append(e.orderTrades[trade.MakerOrderID], trade)
 }
 
-func (e *Engine) GetOrderTrades(orderID int64, offset, limit int) ([]*Trade, int) {
+func (e *Engine) GetOrderTrades(orderID uint64, offset, limit int) ([]*Trade, int) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 

@@ -4,27 +4,27 @@ import "errors"
 
 var ErrInvalidSide = errors.New("invalid side type")
 
-type Side int
+type Side uint8
 
 const (
-	SideBuy  Side = 0
-	SideSell Side = 1
+	SideAsk Side = 1
+	SideBid Side = 2
 )
 
 func (s Side) IsValid() bool {
-	return s == SideBuy || s == SideSell
+	return s == SideAsk || s == SideBid
 }
 
 func (s Side) Opposite() Side {
-	if s == SideBuy {
-		return SideSell
+	if s == SideAsk {
+		return SideBid
 	}
-	return SideBuy
+	return SideAsk
 }
 
 func (s Side) String() string {
-	if s == SideBuy {
-		return "buy"
+	if s == SideAsk {
+		return "sell"
 	}
-	return "sell"
+	return "buy"
 }

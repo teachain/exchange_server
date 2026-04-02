@@ -44,7 +44,7 @@ func (s *Server) handleHealth(c *gin.Context) {
 }
 
 type CreateOrderRequest struct {
-	UserID int64  `json:"user_id" binding:"required"`
+	UserID uint32 `json:"user_id" binding:"required"`
 	Market string `json:"market" binding:"required"`
 	Side   string `json:"side" binding:"required"`
 	Price  string `json:"price" binding:"required"`
@@ -82,15 +82,16 @@ func (s *Server) handleCreateOrder(c *gin.Context) {
 	}
 
 	incoming := &order.Order{
-		ID:        s.engine.NextID(),
-		UserID:    req.UserID,
-		Market:    req.Market,
-		Side:      side,
-		Price:     price,
-		Amount:    amount,
-		Deal:      decimal.Zero,
-		Status:    order.OrderStatusPending,
-		CreatedAt: time.Now(),
+		ID:         s.engine.NextID(),
+		UserID:     req.UserID,
+		Market:     req.Market,
+		Side:       side,
+		Price:      price,
+		Amount:     amount,
+		Left:       amount,
+		Status:     order.OrderStatusPending,
+		CreateTime: time.Now(),
+		UpdateTime: time.Now(),
 	}
 
 	trades, err := s.engine.ProcessOrder(incoming)
@@ -106,9 +107,9 @@ func (s *Server) handleCreateOrder(c *gin.Context) {
 }
 
 type CancelOrderRequest struct {
-	OrderID int64  `json:"order_id" binding:"required"`
+	OrderID uint64 `json:"order_id" binding:"required"`
 	Market  string `json:"market" binding:"required"`
-	UserID  int64  `json:"user_id" binding:"required"`
+	UserID  uint32 `json:"user_id" binding:"required"`
 }
 
 func (s *Server) handleCancelOrder(c *gin.Context) {
@@ -129,7 +130,7 @@ func (s *Server) handleCancelOrder(c *gin.Context) {
 
 func (s *Server) handleGetOrder(c *gin.Context) {
 	idStr := c.Param("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid order id"})
 		return
@@ -146,7 +147,7 @@ func (s *Server) handleGetOrder(c *gin.Context) {
 
 func (s *Server) handleGetBalance(c *gin.Context) {
 	userIDStr := c.Param("user_id")
-	userID, err := strconv.ParseInt(userIDStr, 10, 64)
+	userID, err := strconv.ParseUint(userIDStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
 		return
@@ -158,7 +159,7 @@ func (s *Server) handleGetBalance(c *gin.Context) {
 		return
 	}
 
-	balance, frozen := s.engine.GetBalance(userID, asset)
+	balance, frozen := s.engine.GetBalance(uint32(userID), asset)
 
 	c.JSON(http.StatusOK, gin.H{
 		"user_id": userID,
@@ -189,8 +190,8 @@ func (s *Server) handleGetDepth(c *gin.Context) {
 		return
 	}
 
-	bids := ob.GetDepth(20, order.SideBuy)
-	asks := ob.GetDepth(20, order.SideSell)
+	bids := ob.GetDepth(20, order.SideBid)
+	asks := ob.GetDepth(20, order.SideAsk)
 
 	bidsResp := make([]DepthLevel, len(bids))
 	for i, d := range bids {
@@ -211,9 +212,9 @@ func (s *Server) handleGetDepth(c *gin.Context) {
 func parseSide(s string) (order.Side, error) {
 	switch s {
 	case "buy":
-		return order.SideBuy, nil
+		return order.SideBid, nil
 	case "sell":
-		return order.SideSell, nil
+		return order.SideAsk, nil
 	default:
 		return 0, order.ErrInvalidSide
 	}
@@ -246,10 +247,10 @@ func (s *Server) handleAssetSummary(c *gin.Context) {
 		var availableCount, freezeCount int
 
 		for _, bal := range balances {
-			totalBalance = totalBalance.Add(bal.Balance)
+			totalBalance = totalBalance.Add(bal.Available).Add(bal.Frozen)
 			if bal.Frozen.IsZero() {
 				availableCount++
-				availableBalance = availableBalance.Add(bal.Balance)
+				availableBalance = availableBalance.Add(bal.Available)
 			} else {
 				freezeCount++
 				freezeBalance = freezeBalance.Add(bal.Frozen)

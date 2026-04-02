@@ -70,10 +70,10 @@ func HandleBalanceQuery(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error)
 	engine := s.GetEngine()
 
 	if len(params) == 1 {
-		balances := engine.GetAllBalancesForUser(int64(userID))
+		balances := engine.GetAllBalancesForUser(uint32(userID))
 		for asset, bal := range balances {
 			result[asset] = BalanceInfo{
-				Available: bal.Balance.Sub(bal.Frozen).String(),
+				Available: bal.Available.String(),
 				Freeze:    bal.Frozen.String(),
 			}
 		}
@@ -92,7 +92,7 @@ func HandleBalanceQuery(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error)
 				return nil, fmt.Errorf("invalid asset name")
 			}
 			prec := AssetPrec(asset)
-			balance, frozen := engine.GetBalance(int64(userID), asset)
+			balance, frozen := engine.GetBalance(uint32(userID), asset)
 
 			result[asset] = BalanceInfo{
 				Available: adjustPrecision(balance.Sub(frozen), prec).String(),
@@ -156,9 +156,9 @@ func HandleBalanceUpdate(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error
 	prec := AssetPrec(asset)
 
 	if change.IsPositive() {
-		engine.GetBalances().AddBalance(int64(userID), asset, adjustPrecision(change, prec))
+		engine.GetBalances().Add(uint32(userID), asset, adjustPrecision(change, prec))
 	} else if change.IsNegative() {
-		err := engine.GetBalances().DeductBalance(int64(userID), asset, adjustPrecision(change.Abs(), prec))
+		err := engine.GetBalances().Sub(uint32(userID), asset, adjustPrecision(change.Abs(), prec))
 		if err != nil {
 			return nil, fmt.Errorf("balance not enough")
 		}
@@ -213,10 +213,10 @@ func HandleAssetSummary(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error)
 		var availableCount, freezeCount int
 
 		for _, bal := range balances {
-			totalBalance = totalBalance.Add(bal.Balance)
+			totalBalance = totalBalance.Add(bal.Available).Add(bal.Frozen)
 			if bal.Frozen.IsZero() {
 				availableCount++
-				availableBalance = availableBalance.Add(bal.Balance)
+				availableBalance = availableBalance.Add(bal.Available)
 			} else {
 				freezeCount++
 				freezeBalance = freezeBalance.Add(bal.Frozen)

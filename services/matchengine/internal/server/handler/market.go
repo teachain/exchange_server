@@ -64,13 +64,13 @@ type KlineInfo struct {
 }
 
 type DealInfo struct {
-	ID          int64           `json:"id"`
+	ID          uint64          `json:"id"`
 	Time        float64         `json:"time"`
 	Amount      decimal.Decimal `json:"amount"`
 	Price       decimal.Decimal `json:"price"`
 	Side        order.Side      `json:"side"`
-	BuyOrderID  int64           `json:"buy_order_id"`
-	SellOrderID int64           `json:"sell_order_id"`
+	BuyOrderID  uint64          `json:"buy_order_id"`
+	SellOrderID uint64          `json:"sell_order_id"`
 }
 
 type MarketStatus struct {
@@ -156,12 +156,12 @@ func HandleMarketStatus(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error)
 	for _, o := range orders {
 		if o.Status == order.OrderStatusPending || o.Status == order.OrderStatusPartial {
 			pendingCount++
-			if o.Side == order.SideBuy {
+			if o.Side == order.SideBid {
 				bidCount++
-				bidAmount = bidAmount.Add(o.Amount.Sub(o.Deal))
+				bidAmount = bidAmount.Add(o.Left)
 			} else {
 				askCount++
-				askAmount = askAmount.Add(o.Amount.Sub(o.Deal))
+				askAmount = askAmount.Add(o.Left)
 			}
 		}
 	}
@@ -212,19 +212,19 @@ func HandleMarketStatusToday(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, e
 
 	orders := ob.GetOrders()
 	for _, o := range orders {
-		if o.CreatedAt.Before(startOfDay) {
+		if o.CreateTime.Before(startOfDay) {
 			continue
 		}
-		if o.Status == order.OrderStatusFilled {
+		if o.Status == order.OrderStatusFinished {
 			tradeCount++
-			deal = deal.Add(o.Price.Mul(o.Deal))
+			deal = deal.Add(o.Price.Mul(o.Left))
 			if highPrice.IsZero() || o.Price.GreaterThan(highPrice) {
 				highPrice = o.Price
 			}
 			if lowPrice.IsZero() || o.Price.LessThan(lowPrice) {
 				lowPrice = o.Price
 			}
-			volume = volume.Add(o.Deal)
+			volume = volume.Add(o.Left)
 			closePrice = o.Price
 		}
 	}
@@ -362,11 +362,11 @@ func HandleMarketLast(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) {
 
 	orders := ob.GetOrders()
 	for _, o := range orders {
-		if o.Status == order.OrderStatusFilled && o.FinishedAt != nil {
-			if lastTime == 0 || o.FinishedAt.Unix() > int64(lastTime) {
-				lastTime = float64(o.FinishedAt.Unix())
+		if o.Status == order.OrderStatusFinished && o.UpdateTime.IsZero() {
+			if lastTime == 0 || o.UpdateTime.Unix() > int64(lastTime) {
+				lastTime = float64(o.UpdateTime.Unix())
 				lastPrice = o.Price
-				lastAmount = o.Deal
+				lastAmount = o.Left
 			}
 		}
 	}
@@ -433,11 +433,11 @@ func HandleMarketUserDeals(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, err
 	var userDeals []DealInfo
 	orders := ob.GetOrders()
 	for _, o := range orders {
-		if o.UserID == int64(userID) && o.Status == order.OrderStatusFilled && o.FinishedAt != nil {
+		if uint32(userID) == o.UserID && o.Status == order.OrderStatusFinished && o.UpdateTime.IsZero() {
 			userDeals = append(userDeals, DealInfo{
 				ID:          o.ID,
-				Time:        float64(o.FinishedAt.Unix()),
-				Amount:      o.Deal,
+				Time:        float64(o.UpdateTime.Unix()),
+				Amount:      o.Left,
 				Price:       o.Price,
 				Side:        o.Side,
 				BuyOrderID:  0,
@@ -498,24 +498,24 @@ func HandleMarketSummary(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error
 	orders := ob.GetOrders()
 	for _, o := range orders {
 		if o.Status == order.OrderStatusPending || o.Status == order.OrderStatusPartial {
-			if o.Side == order.SideBuy {
+			if o.Side == order.SideBid {
 				buyOrderCount++
 			} else {
 				sellOrderCount++
 			}
 		}
-		if o.CreatedAt.Before(startOfDay) {
+		if o.CreateTime.Before(startOfDay) {
 			continue
 		}
-		if o.Status == order.OrderStatusFilled {
-			deal = deal.Add(o.Price.Mul(o.Deal))
+		if o.Status == order.OrderStatusFinished {
+			deal = deal.Add(o.Price.Mul(o.Left))
 			if highPrice.IsZero() || o.Price.GreaterThan(highPrice) {
 				highPrice = o.Price
 			}
 			if lowPrice.IsZero() || o.Price.LessThan(lowPrice) {
 				lowPrice = o.Price
 			}
-			volume = volume.Add(o.Deal)
+			volume = volume.Add(o.Left)
 			closePrice = o.Price
 		}
 	}
@@ -543,13 +543,13 @@ func HandleMarketSummary(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error
 
 	if bestBid != nil {
 		info.BidPrice = bestBid.Price.String()
-		bidAmt := bestBid.Amount.Sub(bestBid.Deal)
+		bidAmt := bestBid.Amount.Sub(bestBid.Left)
 		info.BidAmount = bidAmt.String()
 	}
 
 	if bestAsk != nil {
 		info.AskPrice = bestAsk.Price.String()
-		askAmt := bestAsk.Amount.Sub(bestAsk.Deal)
+		askAmt := bestAsk.Amount.Sub(bestAsk.Left)
 		info.AskAmount = askAmt.String()
 	}
 
