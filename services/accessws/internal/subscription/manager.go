@@ -7,27 +7,33 @@ import (
 )
 
 type Manager struct {
-	orderSubs map[uint32]map[*model.ClientSession]bool
-	assetSubs map[string]map[*model.ClientSession]bool
-	depthSubs map[string]map[*model.ClientSession]bool
-	klineSubs map[string]map[*model.ClientSession]bool
-	priceSubs map[string]map[*model.ClientSession]bool
-	dealsSubs map[string]map[*model.ClientSession]bool
-	stateSubs map[string]map[*model.ClientSession]bool
-	todaySubs map[string]map[*model.ClientSession]bool
-	mu        sync.RWMutex
+	orderSubs      map[uint32]map[*model.ClientSession]bool
+	assetSubs      map[string]map[*model.ClientSession]bool
+	depthSubs      map[string]map[*model.ClientSession]bool
+	klineSubs      map[string]map[*model.ClientSession]bool
+	priceSubs      map[string]map[*model.ClientSession]bool
+	dealsSubs      map[string]map[*model.ClientSession]bool
+	stateSubs      map[string]map[*model.ClientSession]bool
+	todaySubs      map[string]map[*model.ClientSession]bool
+	depthSnapshots map[string]*model.DepthSnapshot
+	depthSnapMu    sync.RWMutex
+	dealsBuffers   map[string]*model.DealsBuffer
+	dealsBufMu     sync.RWMutex
+	mu             sync.RWMutex
 }
 
 func NewManager() *Manager {
 	return &Manager{
-		orderSubs: make(map[uint32]map[*model.ClientSession]bool),
-		assetSubs: make(map[string]map[*model.ClientSession]bool),
-		depthSubs: make(map[string]map[*model.ClientSession]bool),
-		klineSubs: make(map[string]map[*model.ClientSession]bool),
-		priceSubs: make(map[string]map[*model.ClientSession]bool),
-		dealsSubs: make(map[string]map[*model.ClientSession]bool),
-		stateSubs: make(map[string]map[*model.ClientSession]bool),
-		todaySubs: make(map[string]map[*model.ClientSession]bool),
+		orderSubs:      make(map[uint32]map[*model.ClientSession]bool),
+		assetSubs:      make(map[string]map[*model.ClientSession]bool),
+		depthSubs:      make(map[string]map[*model.ClientSession]bool),
+		klineSubs:      make(map[string]map[*model.ClientSession]bool),
+		priceSubs:      make(map[string]map[*model.ClientSession]bool),
+		dealsSubs:      make(map[string]map[*model.ClientSession]bool),
+		stateSubs:      make(map[string]map[*model.ClientSession]bool),
+		todaySubs:      make(map[string]map[*model.ClientSession]bool),
+		depthSnapshots: make(map[string]*model.DepthSnapshot),
+		dealsBuffers:   make(map[string]*model.DealsBuffer),
 	}
 }
 
@@ -362,4 +368,32 @@ func (m *Manager) GetAllTodaySubs() map[string]map[*model.ClientSession]bool {
 		result[k] = v
 	}
 	return result
+}
+
+func (m *Manager) GetDepthSnapshot(key string) *model.DepthSnapshot {
+	m.depthSnapMu.RLock()
+	defer m.depthSnapMu.RUnlock()
+	return m.depthSnapshots[key]
+}
+
+func (m *Manager) SetDepthSnapshot(key string, snap *model.DepthSnapshot) {
+	m.depthSnapMu.Lock()
+	defer m.depthSnapMu.Unlock()
+	m.depthSnapshots[key] = snap
+}
+
+func (m *Manager) GetDealsBuffer(market string) *model.DealsBuffer {
+	m.dealsBufMu.Lock()
+	defer m.dealsBufMu.Unlock()
+	if buf, ok := m.dealsBuffers[market]; ok {
+		return buf
+	}
+	buf := model.NewDealsBuffer(100)
+	m.dealsBuffers[market] = buf
+	return buf
+}
+
+func (m *Manager) UpdateDealsBuffer(market string, deal model.DealRecord) {
+	buf := m.GetDealsBuffer(market)
+	buf.Add(deal)
 }
