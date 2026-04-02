@@ -1,6 +1,8 @@
 package config
 
 import (
+	"time"
+
 	"github.com/spf13/viper"
 	"strconv"
 )
@@ -9,6 +11,7 @@ type Config struct {
 	Server  ServerConfig  `mapstructure:"server"`
 	Workers int           `mapstructure:"workers"`
 	Backend BackendConfig `mapstructure:"backend"`
+	Timeout time.Duration `mapstructure:"timeout"`
 }
 
 type ServerConfig struct {

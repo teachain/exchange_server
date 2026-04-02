@@ -77,7 +77,7 @@ func (p *BackendProxy) forwardJSON(ctx context.Context, pool *Pool, path string,
 	}
 
 	if errMsg, ok := result["error"].(string); ok && errMsg != "" {
-		return nil, fmt.Errorf(errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
 	}
 
 	return result["result"], nil
