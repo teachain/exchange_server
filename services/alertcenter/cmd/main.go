@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -91,7 +92,12 @@ func main() {
 
 	redisClient := newRedisClient(viper.GetViper())
 	a := alerter.NewAlerter(redisClient)
+	emailSender := alerter.NewEmailSender(viper.GetViper())
+	consumer := alerter.NewConsumer(redisClient, emailSender, 60*time.Second)
 	srv := server.New(host, port, a)
+
+	ctx := context.Background()
+	go consumer.Start(ctx)
 
 	stopCh := make(chan struct{})
 	go func() {
@@ -101,6 +107,7 @@ func main() {
 		log.Printf("Received signal %v, shutting down...", sig)
 
 		go srv.Stop()
+		consumer.Stop()
 
 		shutdownTimeout := time.Duration(viper.GetInt("server.shutdown_timeout")) * time.Second
 		if shutdownTimeout == 0 {

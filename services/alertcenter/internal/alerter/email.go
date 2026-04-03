@@ -8,6 +8,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/ses"
+	sesTypes "github.com/aws/aws-sdk-go-v2/service/ses/types"
 	"github.com/spf13/viper"
 )
 
@@ -188,7 +193,44 @@ func NewSESClient(region, accessKey, secretKey string) *SESClient {
 }
 
 func (c *SESClient) SendEmail(ctx context.Context, fromARN string, toARNs []string, from, to []string, subject, body string) error {
-	return fmt.Errorf("AWS SES integration requires AWS SDK - implement with github.com/aws/aws-sdk-go/service/ses")
+	awsCfg, err := config.LoadDefaultConfig(ctx,
+		config.WithRegion(c.region),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(c.accessKey, c.secretKey, "")),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	client := ses.NewFromConfig(awsCfg)
+
+	htmlBody := "<html><body>" + body + "</body></html>"
+
+	input := &ses.SendEmailInput{
+		Source: aws.String(from[0]),
+		Destination: &sesTypes.Destination{
+			ToAddresses: to,
+		},
+		Message: &sesTypes.Message{
+			Subject: &sesTypes.Content{
+				Data: aws.String(subject),
+			},
+			Body: &sesTypes.Body{
+				Html: &sesTypes.Content{
+					Data: aws.String(htmlBody),
+				},
+				Text: &sesTypes.Content{
+					Data: aws.String(body),
+				},
+			},
+		},
+	}
+
+	_, err = client.SendEmail(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to send email via SES: %w", err)
+	}
+
+	return nil
 }
 
 func (e *EmailSender) UpdateConfig(cfg *viper.Viper) {
