@@ -132,6 +132,36 @@ func (bm *BalanceManager) Add(userID uint32, asset string, amount decimal.Decima
 	return nil
 }
 
+func (bm *BalanceManager) Change(userID uint32, asset string, change decimal.Decimal) error {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
+
+	k := bm.key(userID, asset)
+	b, ok := bm.balances[k]
+	if !ok {
+		if change.IsNegative() {
+			return ErrBalanceNotFound
+		}
+		bm.balances[k] = &Balance{
+			UserID:    userID,
+			Asset:     asset,
+			Available: change,
+			Frozen:    decimal.Zero,
+		}
+		return nil
+	}
+
+	if change.IsNegative() {
+		if b.Available.LessThan(change.Abs()) {
+			return ErrInsufficientBalance
+		}
+		b.Available = b.Available.Add(change)
+	} else {
+		b.Available = b.Available.Add(change)
+	}
+	return nil
+}
+
 func (bm *BalanceManager) DeductBalance(userID uint32, asset string, amount decimal.Decimal) error {
 	return bm.Sub(userID, asset, amount)
 }

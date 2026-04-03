@@ -44,6 +44,7 @@ type Engine struct {
 	mu            sync.RWMutex
 	orderBooks    map[string]*order.OrderBook
 	balances      *balance.BalanceManager
+	updateMgr     *balance.UpdateManager
 	tradeCh       chan *Trade
 	orderCh       chan *order.Order
 	idGenerator   *IDGenerator
@@ -289,6 +290,14 @@ func (e *Engine) OrderChan() <-chan *order.Order {
 
 func (e *Engine) SetProducer(p Producer) {
 	e.producer = p
+}
+
+func (e *Engine) SetUpdateManager(mgr *balance.UpdateManager) {
+	e.updateMgr = mgr
+}
+
+func (e *Engine) GetUpdateManager() *balance.UpdateManager {
+	return e.updateMgr
 }
 
 func (e *Engine) AddTradeToOrder(trade *Trade) {

@@ -1,10 +1,14 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/shopspring/decimal"
+	"github.com/viabtc/go-project/services/matchengine/internal/balance"
 	"github.com/viabtc/go-project/services/matchengine/internal/model"
 	"github.com/viabtc/go-project/services/matchengine/internal/server"
 )
@@ -129,7 +133,7 @@ func HandleBalanceUpdate(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error
 		return nil, fmt.Errorf("invalid business")
 	}
 
-	_, ok = params[3].(float64)
+	businessID, ok := params[3].(float64)
 	if !ok {
 		return nil, fmt.Errorf("invalid business_id")
 	}
@@ -149,11 +153,22 @@ func HandleBalanceUpdate(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error
 		return nil, fmt.Errorf("invalid detail")
 	}
 
-	_ = business
 	_ = detail
 
 	engine := s.GetEngine()
 	prec := AssetPrec(asset)
+	updateMgr := engine.GetUpdateManager()
+
+	if updateMgr != nil {
+		ctx := context.Background()
+		err := updateMgr.UpdateBalance(ctx, uint32(userID), asset, business, strconv.FormatFloat(businessID, 'f', 0, 64), change.IntPart())
+		if err != nil {
+			if errors.Is(err, balance.ErrDuplicateUpdate) {
+				return nil, fmt.Errorf("duplicate update rejected")
+			}
+			return nil, err
+		}
+	}
 
 	if change.IsPositive() {
 		engine.GetBalances().Add(uint32(userID), asset, adjustPrecision(change, prec))
