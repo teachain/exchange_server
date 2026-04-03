@@ -111,7 +111,12 @@ func (e *Engine) matchAsTaker(incoming *order.Order, makerQueue *order.PriceQueu
 
 		remainingAmount := incoming.Left
 		makerRemaining := maker.Left
-		tradeAmount := decimal.Min(remainingAmount, makerRemaining)
+		var tradeAmount decimal.Decimal
+		if isMarketOrder && incoming.Side == order.SideBid {
+			tradeAmount = decimal.Min(incoming.Left.Div(maker.Price), makerRemaining)
+		} else {
+			tradeAmount = decimal.Min(remainingAmount, makerRemaining)
+		}
 		tradePrice := maker.Price
 
 		trade := &Trade{

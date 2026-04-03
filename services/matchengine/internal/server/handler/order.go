@@ -328,7 +328,7 @@ func HandleOrderPutMarket(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, erro
 		Type:       order.OrderTypeMarket,
 		Price:      marketPrice,
 		Amount:     amount,
-		Left:       amount,
+		Left:       marketPrice.Mul(amount),
 		TakerFee:   takerFee,
 		Status:     order.OrderStatusPending,
 		CreateTime: time.Now(),
