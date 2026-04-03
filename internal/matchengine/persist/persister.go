@@ -204,35 +204,49 @@ func (sm *SliceManager) LoadOrders() (map[string][]*order.Order, error) {
 func (sm *SliceManager) LoadBalances() (map[string]*balance.Balance, error) {
 	result := make(map[string]*balance.Balance)
 
-	rows, err := sm.db.Query(`
-		SELECT sb.balance_data FROM slice_balance sb
-		INNER JOIN slice_history sh ON sb.slice_id = sh.id
-		ORDER BY sh.timestamp DESC LIMIT 1
-	`)
+	tables, err := sm.getLatestSliceBalanceTable()
+	if err != nil || tables == "" {
+		return result, nil
+	}
+	return sm.loadBalancesFromOldTable(tables)
+}
+
+func (sm *SliceManager) getLatestSliceBalanceTable() (string, error) {
+	var tableName string
+	err := sm.db.QueryRow(`
+		SELECT table_name FROM information_schema.tables 
+		WHERE table_schema = DATABASE() AND table_name LIKE 'slice_balance_%' AND table_name NOT LIKE '%\_example'
+		ORDER BY table_name DESC LIMIT 1
+	`).Scan(&tableName)
+	if err != nil {
+		return "", err
+	}
+	return tableName, nil
+}
+
+func (sm *SliceManager) loadBalancesFromOldTable(tableName string) (map[string]*balance.Balance, error) {
+	result := make(map[string]*balance.Balance)
+
+	rows, err := sm.db.Query(fmt.Sprintf("SELECT user_id, asset, balance FROM %s", tableName))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var balanceData string
-		if err := rows.Scan(&balanceData); err != nil {
+		var userID uint32
+		var asset string
+		var balanceStr string
+		if err := rows.Scan(&userID, &asset, &balanceStr); err != nil {
 			continue
 		}
 
-		var record struct {
-			Key     string `json:"key"`
-			Balance string `json:"balance"`
-		}
-		if err := json.Unmarshal([]byte(balanceData), &record); err != nil {
-			continue
-		}
+		bal, _ := sm.DeserializeBalance([]byte(fmt.Sprintf(`{"available":"%s","frozen":"0"}`, balanceStr)))
+		bal.UserID = userID
+		bal.Asset = asset
 
-		bal, err := sm.DeserializeBalance([]byte(record.Balance))
-		if err != nil {
-			continue
-		}
-		result[record.Key] = bal
+		key := fmt.Sprintf("%d:%s", userID, asset)
+		result[key] = bal
 	}
 
 	return result, nil

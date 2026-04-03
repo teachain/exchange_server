@@ -54,5 +54,9 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 10 * time.Second
+	}
+
 	return &cfg, nil
 }

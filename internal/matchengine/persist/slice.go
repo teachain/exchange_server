@@ -49,32 +49,38 @@ func NewSliceManager(db *sqlx.DB, persister Persister, sliceInterval, sliceKeepT
 }
 
 func (sm *SliceManager) InitDB() error {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS slice_history (
-			id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	if _, err := sm.db.Exec(`
+		CREATE TABLE IF NOT EXISTS slice_history (
+			id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 			timestamp DATETIME NOT NULL,
 			path VARCHAR(512) NOT NULL,
 			end_oper_id BIGINT NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS slice_order (
-			id BIGINT AUTO_INCREMENT PRIMARY KEY,
-			slice_id BIGINT NOT NULL,
-			order_data TEXT NOT NULL,
-			FOREIGN KEY (slice_id) REFERENCES slice_history(id) ON DELETE CASCADE
-		)`,
-		`CREATE TABLE IF NOT EXISTS slice_balance (
-			id BIGINT AUTO_INCREMENT PRIMARY KEY,
-			slice_id BIGINT NOT NULL,
-			balance_data TEXT NOT NULL,
-			FOREIGN KEY (slice_id) REFERENCES slice_history(id) ON DELETE CASCADE
-		)`,
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create slice_history table: %w", err)
 	}
 
-	for _, q := range queries {
-		if _, err := sm.db.Exec(q); err != nil {
-			return fmt.Errorf("failed to create slice table: %w", err)
-		}
+	if _, err := sm.db.Exec(`
+		CREATE TABLE IF NOT EXISTS slice_order (
+			id BIGINT AUTO_INCREMENT PRIMARY KEY,
+			slice_id INT UNSIGNED NOT NULL,
+			order_data TEXT NOT NULL,
+			FOREIGN KEY (slice_id) REFERENCES slice_history(id) ON DELETE CASCADE
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create slice_order table: %w", err)
+	}
+
+	if _, err := sm.db.Exec(`
+		CREATE TABLE IF NOT EXISTS slice_balance (
+			id BIGINT AUTO_INCREMENT PRIMARY KEY,
+			slice_id INT UNSIGNED NOT NULL,
+			balance_data TEXT NOT NULL,
+			FOREIGN KEY (slice_id) REFERENCES slice_history(id) ON DELETE CASCADE
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create slice_balance table: %w", err)
 	}
 
 	return nil
@@ -103,7 +109,8 @@ func (sm *SliceManager) MakeSlice() error {
 	}
 
 	var endOperLogID int64
-	sm.db.QueryRow("SELECT COALESCE(MAX(id), 0) FROM operlog").Scan(&endOperLogID)
+	operlogTable := "operlog_" + timestamp.Format("20060102")
+	sm.db.QueryRow("SELECT COALESCE(MAX(id), 0) FROM " + operlogTable).Scan(&endOperLogID)
 
 	_, err := sm.db.Exec(
 		"INSERT INTO slice_history (timestamp, path, end_oper_id) VALUES (?, ?, ?)",
@@ -202,9 +209,17 @@ func (sm *SliceManager) ClearOldSlices() error {
 
 func (sm *SliceManager) LoadFromSlice() (*LoadedSlice, error) {
 	var si sliceInfo
+	var timestampUnix int64
 	err := sm.db.QueryRow(
-		"SELECT id, timestamp, path FROM slice_history ORDER BY timestamp DESC LIMIT 1",
-	).Scan(&si.ID, &si.Timestamp, &si.Path)
+		"SELECT id, time, '' FROM slice_history ORDER BY id DESC LIMIT 1",
+	).Scan(&si.ID, &timestampUnix, &si.Path)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find latest slice: %w", err)
+	}
+	si.Timestamp = time.Unix(timestampUnix, 0)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -218,7 +233,7 @@ func (sm *SliceManager) LoadFromSlice() (*LoadedSlice, error) {
 		return nil, fmt.Errorf("failed to load orders: %w", err)
 	}
 
-	balances, err := sm.LoadBalancesFromFile(filepath.Join(si.Path, "balances"))
+	balances, err := sm.LoadBalances()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load balances: %w", err)
 	}

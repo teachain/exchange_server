@@ -109,13 +109,20 @@ func (w *OperLogWriter) flushLoop() {
 }
 
 func (w *OperLogWriter) flush(batch []*OperLog) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	tableName := "operlog_" + time.Now().Format("20060102")
+
 	tx, err := w.db.Beginx()
 	if err != nil {
 		return fmt.Errorf("begin transaction failed: %w", err)
 	}
 
 	for _, l := range batch {
-		_, err := tx.Exec("INSERT INTO operlog (type, data) VALUES (?, ?)", l.Type, l.Data)
+		query := fmt.Sprintf("INSERT INTO %s (id, type, time, data) VALUES (?, ?, ?, ?)", tableName)
+		_, err := tx.Exec(query, l.ID, l.Type, l.CreatedAt.Unix(), l.Data)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("insert operlog failed: %w", err)
@@ -136,8 +143,12 @@ type OperLogHandler interface {
 }
 
 func (w *OperLogWriter) Replay(fromID int64, handler OperLogHandler) error {
-	query := "SELECT id, type, data, created_at FROM operlog WHERE id > ? ORDER BY id ASC LIMIT 10000"
+	query := "SELECT id, type, time, data FROM operlog WHERE id > ? ORDER BY id ASC LIMIT 10000"
 	rows, err := w.db.Queryx(query, fromID)
+	if err != nil {
+		stdlog.Printf("operlog table may not exist, skipping replay: %v", err)
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("query operlog failed: %w", err)
 	}
@@ -176,8 +187,10 @@ func (w *OperLogWriter) processLog(log *OperLog, handler OperLogHandler) error {
 }
 
 func (w *OperLogWriter) GetLastLogID() (int64, error) {
+	tableName := "operlog_" + time.Now().Format("20060102")
 	var id int64
-	err := w.db.Get(&id, "SELECT MAX(id) FROM operlog")
+	query := fmt.Sprintf("SELECT COALESCE(MAX(id), 0) FROM %s", tableName)
+	err := w.db.Get(&id, query)
 	if err != nil {
 		return 0, err
 	}
