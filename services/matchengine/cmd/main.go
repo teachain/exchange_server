@@ -11,6 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/viper"
+	"github.com/viabtc/go-project/internal/utils"
 	"github.com/viabtc/go-project/services/matchengine/internal/cli"
 	"github.com/viabtc/go-project/services/matchengine/internal/engine"
 	"github.com/viabtc/go-project/services/matchengine/internal/history"
@@ -21,6 +22,12 @@ import (
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to config file")
 	flag.Parse()
+
+	processName := "matchengine"
+	if utils.ProcessExists(processName) {
+		fmt.Println("process", processName, "already running, exiting")
+		os.Exit(1)
+	}
 
 	viper.SetConfigFile(*configPath)
 	viper.SetConfigType("yaml")

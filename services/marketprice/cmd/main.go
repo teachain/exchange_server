@@ -11,6 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/spf13/viper"
+	"github.com/viabtc/go-project/internal/utils"
 	"github.com/viabtc/go-project/services/marketprice/internal/cache"
 	"github.com/viabtc/go-project/services/marketprice/internal/log"
 	"github.com/viabtc/go-project/services/marketprice/internal/market"
@@ -34,6 +35,12 @@ func setCoreLimit(max uint64) {
 func main() {
 	configPath := flag.String("config", "config.yaml", "config file path")
 	flag.Parse()
+
+	processName := "marketprice"
+	if utils.ProcessExists(processName) {
+		fmt.Println("process", processName, "already running, exiting")
+		os.Exit(1)
+	}
 
 	viper.SetConfigFile(*configPath)
 	viper.SetConfigType("yaml")

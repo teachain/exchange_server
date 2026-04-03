@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sys/unix"
 
+	"github.com/viabtc/go-project/internal/utils"
 	"github.com/viabtc/go-project/services/accesshttp/internal/config"
 	"github.com/viabtc/go-project/services/accesshttp/internal/server"
 )
@@ -34,6 +35,12 @@ func setCoreLimit(max uint64) {
 func main() {
 	configPath := flag.String("config", "config.yaml", "config file path")
 	flag.Parse()
+
+	processName := "accesshttp"
+	if utils.ProcessExists(processName) {
+		fmt.Println("process", processName, "already running, exiting")
+		os.Exit(1)
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {

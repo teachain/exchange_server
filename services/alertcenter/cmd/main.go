@@ -12,6 +12,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
+	"github.com/viabtc/go-project/internal/utils"
 	"github.com/viabtc/go-project/services/alertcenter/internal/alerter"
 	rotatelog "github.com/viabtc/go-project/services/alertcenter/internal/log"
 	"github.com/viabtc/go-project/services/alertcenter/internal/server"
@@ -59,6 +60,12 @@ func newRedisClient(cfg *viper.Viper) redis.Cmdable {
 func main() {
 	configPath := flag.String("config", "config.yaml", "config file path")
 	flag.Parse()
+
+	processName := "alertcenter"
+	if utils.ProcessExists(processName) {
+		fmt.Println("process", processName, "already running, exiting")
+		os.Exit(1)
+	}
 
 	viper.SetConfigFile(*configPath)
 	viper.SetConfigType("yaml")

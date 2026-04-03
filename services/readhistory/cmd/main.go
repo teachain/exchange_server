@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sys/unix"
 
+	"github.com/viabtc/go-project/internal/utils"
 	rotatelog "github.com/viabtc/go-project/services/readhistory/internal/log"
 	"github.com/viabtc/go-project/services/readhistory/internal/reader"
 	"github.com/viabtc/go-project/services/readhistory/internal/server"
@@ -44,6 +45,12 @@ func getDBPassword() string {
 func main() {
 	configPath := flag.String("config", "config.yaml", "config file path")
 	flag.Parse()
+
+	processName := "readhistory"
+	if utils.ProcessExists(processName) {
+		fmt.Println("process", processName, "already running, exiting")
+		os.Exit(1)
+	}
 
 	viper.SetConfigFile(*configPath)
 	viper.SetConfigType("yaml")

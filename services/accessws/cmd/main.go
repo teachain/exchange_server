@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/viabtc/go-project/internal/utils"
 	"github.com/viabtc/go-project/services/accessws/internal/config"
 	"github.com/viabtc/go-project/services/accessws/internal/kafka"
 	"github.com/viabtc/go-project/services/accessws/internal/logging"
@@ -36,6 +38,12 @@ func setCoreLimit(max uint64) {
 func main() {
 	configPath := flag.String("config", "config.yaml", "path to config file")
 	flag.Parse()
+
+	processName := "accessws"
+	if utils.ProcessExists(processName) {
+		fmt.Println("process", processName, "already running, exiting")
+		os.Exit(1)
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
