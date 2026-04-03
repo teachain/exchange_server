@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/viabtc/go-project/internal/alert"
 	"github.com/viabtc/go-project/internal/utils"
 	"github.com/viabtc/go-project/services/accessws/internal/config"
 	"github.com/viabtc/go-project/services/accessws/internal/kafka"
@@ -59,6 +60,16 @@ func main() {
 	}
 	logger.Info("logger initialized")
 
+	alerter, err := alert.NewAlerter(alert.AlertConfig{
+		Host: cfg.Alert.Host,
+		Port: cfg.Alert.Port,
+	})
+	if err != nil {
+		logger.Warn("alert init failed: %v", err)
+	} else {
+		alerter.SendAlert("accessws started")
+	}
+
 	wsServer, err := server.NewWSServer(cfg)
 	if err != nil {
 		logger.Fatal("failed to create server: %v", err)
@@ -75,6 +86,9 @@ func main() {
 
 	if err := kafkaConsumer.Start(); err != nil {
 		logger.Warn("failed to start kafka consumer: %v (continuing without it)", err)
+		if alerter != nil {
+			alerter.SendAlert("accessws kafka consumer start failed: %v", err)
+		}
 	}
 
 	monitorServer := server.NewMonitorServer(":8082")
@@ -91,6 +105,10 @@ func main() {
 			logger.Fatal("server error: %v", err)
 		}
 	}()
+
+	if alerter != nil {
+		defer alerter.Close()
+	}
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

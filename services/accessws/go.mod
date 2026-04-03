@@ -39,3 +39,4 @@ require (
 )
 
 replace github.com/viabtc/go-project => ../../
+replace github.com/viabtc/go-project/internal/alert => ../../internal/alert

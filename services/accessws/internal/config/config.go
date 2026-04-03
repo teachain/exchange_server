@@ -14,6 +14,12 @@ type Config struct {
 	Intervals    IntervalConfig `mapstructure:"intervals"`
 	DepthLimit   []int          `mapstructure:"depth_limit"`
 	DepthMerge   []string       `mapstructure:"depth_merge"`
+	Alert        AlertConfig    `mapstructure:"alert"`
+}
+
+type AlertConfig struct {
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
 }
 
 type ServerConfig struct {
