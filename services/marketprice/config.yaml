@@ -19,6 +19,7 @@ cache:
   sec_max: 86400      # 24 hours
   min_max: 604800     # 7 days
   hour_max: 2592000   # 30 days
+  timeout: 0.45       # response cache timeout in seconds
 
 server:
   host: "0.0.0.0"

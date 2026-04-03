@@ -77,6 +77,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	cacheTimeout := viper.GetFloat64("cache.timeout")
+	if cacheTimeout <= 0 {
+		cacheTimeout = 0.45
+	}
+	srv = server.NewWithCache(time.Duration(cacheTimeout * float64(time.Second)))
+
 	go srv.StartConsumer(brokers, group, topic, redisAddr, redisPassword, partition)
 
 	marketMgr := srv.GetMarketManager()

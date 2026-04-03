@@ -1,22 +1,34 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
+	"github.com/viabtc/go-project/services/marketprice/internal/cache"
 	"github.com/viabtc/go-project/services/marketprice/internal/consumer"
 	"github.com/viabtc/go-project/services/marketprice/internal/kline"
 	"github.com/viabtc/go-project/services/marketprice/internal/market"
 	"github.com/viabtc/go-project/services/marketprice/internal/model"
 )
 
+const (
+	cmdKline            = 1
+	cmdMarketStatus     = 2
+	cmdMarketKline      = 3
+	cmdMarketDeals      = 4
+	cmdMarketWeekKline  = 5
+	cmdMarketMonthKline = 6
+)
+
 type Server struct {
 	Router    *gin.Engine
 	km        *kline.KlineManager
 	marketMgr *market.Manager
+	cache     *cache.DictCache
 }
 
 func New() *Server {
@@ -27,12 +39,25 @@ func New() *Server {
 	}
 }
 
+func NewWithCache(cacheTTL time.Duration) *Server {
+	return &Server{
+		Router:    gin.Default(),
+		km:        kline.NewKlineManager(),
+		marketMgr: market.NewManager(),
+		cache:     cache.NewDictCache(cacheTTL),
+	}
+}
+
 func (s *Server) GetMarketManager() *market.Manager {
 	return s.marketMgr
 }
 
 func (s *Server) GetKlineManager() *kline.KlineManager {
 	return s.km
+}
+
+func (s *Server) GetCache() *cache.DictCache {
+	return s.cache
 }
 
 func (s *Server) Start(addr string) error {
@@ -75,10 +100,24 @@ func (s *Server) handleGetKline(c *gin.Context) {
 		ts = time.Now().Unix()
 	}
 
+	cacheKey := []byte(market + ":" + interval + ":" + strconv.FormatInt(ts, 10))
+	if s.cache != nil {
+		if cached, ok := s.cache.Get(cmdKline, cacheKey); ok {
+			c.Data(http.StatusOK, "application/json", cached)
+			return
+		}
+	}
+
 	k := s.km.GetKline(market, kline.Interval(interval), ts)
 	if k == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "kline not found"})
 		return
+	}
+
+	if s.cache != nil {
+		if data, err := json.Marshal(k); err == nil {
+			s.cache.Set(cmdKline, cacheKey, data)
+		}
 	}
 
 	c.JSON(http.StatusOK, k)
@@ -93,6 +132,14 @@ func (s *Server) HandleMarketStatus(c *gin.Context) {
 	periodStr := c.DefaultQuery("period", "60")
 	period, _ := strconv.ParseInt(periodStr, 10, 64)
 
+	cacheKey := []byte(marketName + ":" + periodStr)
+	if s.cache != nil {
+		if cached, ok := s.cache.Get(cmdMarketStatus, cacheKey); ok {
+			c.Data(http.StatusOK, "application/json", cached)
+			return
+		}
+	}
+
 	info, ok := s.marketMgr.Get(marketName)
 	if !ok {
 		c.JSON(404, gin.H{"error": "market not found"})
@@ -100,6 +147,13 @@ func (s *Server) HandleMarketStatus(c *gin.Context) {
 	}
 
 	status := s.calculateMarketStatus(info, period)
+
+	if s.cache != nil {
+		if data, err := json.Marshal(status); err == nil {
+			s.cache.Set(cmdMarketStatus, cacheKey, data)
+		}
+	}
+
 	c.JSON(200, status)
 }
 
@@ -123,6 +177,14 @@ func (s *Server) HandleMarketKline(c *gin.Context) {
 		end = time.Now().Unix()
 	}
 
+	cacheKey := []byte(marketName + ":" + intervalStr + ":" + strconv.FormatInt(start, 10) + ":" + strconv.FormatInt(end, 10))
+	if s.cache != nil {
+		if cached, ok := s.cache.Get(cmdMarketKline, cacheKey); ok {
+			c.Data(http.StatusOK, "application/json", cached)
+			return
+		}
+	}
+
 	info, ok := s.marketMgr.Get(marketName)
 	if !ok {
 		c.JSON(404, gin.H{"error": "market not found"})
@@ -130,13 +192,29 @@ func (s *Server) HandleMarketKline(c *gin.Context) {
 	}
 
 	klines := s.getKlinesForInterval(info, interval, start, end)
-	c.JSON(200, gin.H{"klines": klines})
+	result := gin.H{"klines": klines}
+
+	if s.cache != nil {
+		if data, err := json.Marshal(result); err == nil {
+			s.cache.Set(cmdMarketKline, cacheKey, data)
+		}
+	}
+
+	c.JSON(200, result)
 }
 
 func (s *Server) HandleMarketDeals(c *gin.Context) {
 	marketName := c.Param("market")
 	limit, _ := strconv.ParseInt(c.DefaultQuery("limit", "50"), 10, 64)
 	lastID, _ := strconv.ParseInt(c.DefaultQuery("last_id", "0"), 10, 64)
+
+	cacheKey := []byte(marketName + ":" + strconv.FormatInt(limit, 10) + ":" + strconv.FormatInt(lastID, 10))
+	if s.cache != nil {
+		if cached, ok := s.cache.Get(cmdMarketDeals, cacheKey); ok {
+			c.Data(http.StatusOK, "application/json", cached)
+			return
+		}
+	}
 
 	info, ok := s.marketMgr.Get(marketName)
 	if !ok {
@@ -145,7 +223,15 @@ func (s *Server) HandleMarketDeals(c *gin.Context) {
 	}
 
 	deals := s.getDealsAfterID(info, lastID, limit)
-	c.JSON(200, gin.H{"deals": deals})
+	result := gin.H{"deals": deals}
+
+	if s.cache != nil {
+		if data, err := json.Marshal(result); err == nil {
+			s.cache.Set(cmdMarketDeals, cacheKey, data)
+		}
+	}
+
+	c.JSON(200, result)
 }
 
 func (s *Server) HandleMarketLast(c *gin.Context) {
