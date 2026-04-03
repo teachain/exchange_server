@@ -11,6 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/viper"
+	"github.com/viabtc/go-project/internal/alert"
 	"github.com/viabtc/go-project/internal/utils"
 	"github.com/viabtc/go-project/services/matchengine/internal/cli"
 	"github.com/viabtc/go-project/services/matchengine/internal/engine"
@@ -36,6 +37,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	alertCfg := alert.AlertConfig{
+		Host: viper.GetString("alert.host"),
+		Port: viper.GetInt("alert.port"),
+	}
+	alerter, err := alert.NewAlerter(alertCfg)
+	if err != nil {
+		fmt.Printf("alert init failed: %v\n", err)
+	} else {
+		alerter.SendAlert("matchengine started")
+	}
+	defer func() {
+		if alerter != nil {
+			alerter.SendAlert("matchengine stopped")
+			alerter.Close()
+		}
+	}()
+
 	e := engine.NewEngine()
 
 	dbHost := viper.GetString("database.host")
@@ -49,6 +67,9 @@ func main() {
 	db, err := sqlx.Connect("mysql", dsn)
 	if err != nil {
 		fmt.Println("connect to database failed:", err.Error())
+		if alerter != nil {
+			alerter.SendAlert("matchengine database connection failed: %v", err)
+		}
 		os.Exit(1)
 	}
 	defer db.Close()
@@ -69,6 +90,9 @@ func main() {
 	sm := persist.NewSliceManager(db, e, sliceInterval, sliceKeepTime, sliceDir)
 	if err := sm.InitDB(); err != nil {
 		fmt.Println("init slice db failed:", err.Error())
+		if alerter != nil {
+			alerter.SendAlert("matchengine init slice db failed: %v", err)
+		}
 		os.Exit(1)
 	}
 
@@ -77,6 +101,9 @@ func main() {
 
 	if err := InitFromDB(db, e, sm, operLogWriter); err != nil {
 		fmt.Println("init from db failed:", err.Error())
+		if alerter != nil {
+			alerter.SendAlert("matchengine init from db failed: %v", err)
+		}
 		os.Exit(1)
 	}
 
