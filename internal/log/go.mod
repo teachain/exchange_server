@@ -1,4 +1,4 @@
-module github.com/viabtc/go-project/internal/log
+module github.com/teachain/exchange_server/internal/log
 
 go 1.21
 

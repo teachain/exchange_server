@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/viabtc/go-project/services/accesshttp/internal/model"
-	"github.com/viabtc/go-project/services/accesshttp/internal/proxy"
+	"github.com/teachain/exchange_server/services/accesshttp/internal/model"
+	"github.com/teachain/exchange_server/services/accesshttp/internal/proxy"
 )
 
 type Handler struct {

@@ -11,8 +11,8 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
-	"github.com/viabtc/go-project/services/alertcenter/internal/alerter"
-	"github.com/viabtc/go-project/services/alertcenter/internal/handler"
+	"github.com/teachain/exchange_server/services/alertcenter/internal/alerter"
+	"github.com/teachain/exchange_server/services/alertcenter/internal/handler"
 )
 
 const magicHead = "373d26968a5a2b698045"

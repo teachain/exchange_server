@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/viabtc/go-project/services/alertcenter/internal/alerter"
+	"github.com/teachain/exchange_server/services/alertcenter/internal/alerter"
 )
 
 type Handler struct {

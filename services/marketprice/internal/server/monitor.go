@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/viabtc/go-project/services/marketprice/internal/kline"
-	"github.com/viabtc/go-project/services/marketprice/internal/market"
+	"github.com/teachain/exchange_server/services/marketprice/internal/kline"
+	"github.com/teachain/exchange_server/services/marketprice/internal/market"
 )
 
 type MonitorServer struct {

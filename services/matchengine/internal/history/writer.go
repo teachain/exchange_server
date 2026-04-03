@@ -9,7 +9,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/matchengine/internal/order"
+	"github.com/teachain/exchange_server/services/matchengine/internal/order"
 )
 
 const (
@@ -21,6 +21,8 @@ const (
 )
 
 const HistoryHashNum = 16
+
+const MaxHistoryPendingSize = 5000
 
 type HistoryRecord struct {
 	Type int
@@ -35,6 +37,7 @@ type HistoryWriter struct {
 	flushTimer  *time.Ticker
 	stopCh      chan struct{}
 	tablePrefix string
+	blocked     bool
 }
 
 func NewHistoryWriter(db *sqlx.DB, tablePrefix string) *HistoryWriter {
@@ -44,6 +47,7 @@ func NewHistoryWriter(db *sqlx.DB, tablePrefix string) *HistoryWriter {
 		flushTimer:  time.NewTicker(100 * time.Millisecond),
 		stopCh:      make(chan struct{}),
 		tablePrefix: tablePrefix,
+		blocked:     false,
 	}
 }
 
@@ -54,6 +58,16 @@ func (w *HistoryWriter) Start() {
 func (w *HistoryWriter) Stop() {
 	close(w.stopCh)
 	w.flushPending()
+}
+
+func (w *HistoryWriter) IsBlocked() bool {
+	return w.blocked
+}
+
+func (w *HistoryWriter) PendingCount() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return len(w.pending)
 }
 
 func (w *HistoryWriter) flushLoop() {
@@ -74,6 +88,13 @@ func (w *HistoryWriter) getKey(histType int, hash uint32) string {
 func (w *HistoryWriter) AppendSQL(histType int, hash uint32, sql string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+
+	if len(w.pending) >= MaxHistoryPendingSize {
+		w.blocked = true
+		log.Printf("history pending queue is full, blocking writes")
+		return
+	}
+	w.blocked = false
 
 	key := w.getKey(histType, hash)
 	rec, exists := w.pending[key]

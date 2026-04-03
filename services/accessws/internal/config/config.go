@@ -46,12 +46,13 @@ type ConsumerConfig struct {
 }
 
 type IntervalConfig struct {
-	Depth float64 `mapstructure:"depth"`
-	Price float64 `mapstructure:"price"`
-	Kline float64 `mapstructure:"kline"`
-	Deals float64 `mapstructure:"deals"`
-	State float64 `mapstructure:"state"`
-	Today float64 `mapstructure:"today"`
+	Depth         float64 `mapstructure:"depth"`
+	Price         float64 `mapstructure:"price"`
+	Kline         float64 `mapstructure:"kline"`
+	Deals         float64 `mapstructure:"deals"`
+	State         float64 `mapstructure:"state"`
+	Today         float64 `mapstructure:"today"`
+	CleanInterval float64 `mapstructure:"clean_interval"`
 }
 
 func Load(path string) (*Config, error) {

@@ -2,8 +2,8 @@ package handler
 
 import (
 	"encoding/json"
-	"github.com/viabtc/go-project/services/accessws/internal/model"
-	"github.com/viabtc/go-project/services/accessws/internal/rpc"
+	"github.com/teachain/exchange_server/services/accessws/internal/model"
+	"github.com/teachain/exchange_server/services/accessws/internal/rpc"
 )
 
 type DepthHandler struct {

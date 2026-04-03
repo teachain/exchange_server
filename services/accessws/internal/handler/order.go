@@ -2,8 +2,8 @@ package handler
 
 import (
 	"encoding/json"
-	"github.com/viabtc/go-project/services/accessws/internal/model"
-	"github.com/viabtc/go-project/services/accessws/internal/rpc"
+	"github.com/teachain/exchange_server/services/accessws/internal/model"
+	"github.com/teachain/exchange_server/services/accessws/internal/rpc"
 )
 
 type OrderHandler struct {
@@ -12,9 +12,11 @@ type OrderHandler struct {
 }
 
 type OrderSubMgr interface {
-	OrderSubscribe(*model.ClientSession)
-	OrderUnsubscribe(*model.ClientSession)
-	GetOrderSubscribers(uint32) []*model.ClientSession
+	OrderSubscribe(*model.ClientSession, string)
+	OrderUnsubscribe(*model.ClientSession, string)
+	OrderUnsubscribeAll(*model.ClientSession)
+	GetOrderSubscribers(uint32, string) []*model.ClientSession
+	GetAllOrderSubscribers(uint32) []*model.ClientSession
 }
 
 func NewOrderHandler(rpcClient *rpc.RPCCLient, subMgr OrderSubMgr) *OrderHandler {
@@ -83,7 +85,14 @@ func (h *OrderHandler) HandleOrderSubscribe(sess *model.ClientSession, id interf
 	if !sess.Auth {
 		return model.NewErrorResponse(id, model.ERR_AUTH_REQUIRED, "authentication required")
 	}
-	h.subMgr.OrderSubscribe(sess)
+	if len(params) < 1 {
+		return model.NewErrorResponse(id, model.ERR_INVALID_PARAMS, "need market")
+	}
+	market, ok := params[0].(string)
+	if !ok {
+		return model.NewErrorResponse(id, model.ERR_INVALID_PARAMS, "invalid market type")
+	}
+	h.subMgr.OrderSubscribe(sess, market)
 	return model.NewSuccessResponse(id, true)
 }
 
@@ -91,6 +100,13 @@ func (h *OrderHandler) HandleOrderUnsubscribe(sess *model.ClientSession, id inte
 	if !sess.Auth {
 		return model.NewErrorResponse(id, model.ERR_AUTH_REQUIRED, "authentication required")
 	}
-	h.subMgr.OrderUnsubscribe(sess)
+	if len(params) < 1 {
+		return model.NewErrorResponse(id, model.ERR_INVALID_PARAMS, "need market")
+	}
+	market, ok := params[0].(string)
+	if !ok {
+		return model.NewErrorResponse(id, model.ERR_INVALID_PARAMS, "invalid market type")
+	}
+	h.subMgr.OrderUnsubscribe(sess, market)
 	return model.NewSuccessResponse(id, true)
 }

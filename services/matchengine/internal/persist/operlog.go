@@ -18,6 +18,10 @@ const (
 	OperLogTypeBalanceChange OperLogType = 4
 )
 
+const (
+	MaxOperLogQueueSize = 10000
+)
+
 type OperLog struct {
 	ID        int64       `db:"id" json:"id"`
 	Type      OperLogType `db:"type" json:"type"`
@@ -43,21 +47,37 @@ type OperLogWriter struct {
 	db            *sqlx.DB
 	batchSize     int
 	flushInterval time.Duration
+	blocked       bool
 }
 
 func NewOperLogWriter(db *sqlx.DB) *OperLogWriter {
 	w := &OperLogWriter{
-		logs:          make(chan *OperLog, 10000),
+		logs:          make(chan *OperLog, MaxOperLogQueueSize),
 		db:            db,
 		batchSize:     100,
 		flushInterval: time.Second,
+		blocked:       false,
 	}
 
 	go w.flushLoop()
 	return w
 }
 
+func (w *OperLogWriter) IsBlocked() bool {
+	return w.blocked
+}
+
+func (w *OperLogWriter) QueueLength() int {
+	return len(w.logs)
+}
+
 func (w *OperLogWriter) Write(log *OperLog) {
+	if len(w.logs) >= MaxOperLogQueueSize {
+		w.blocked = true
+		stdlog.Printf("operlog queue is full, blocking writes")
+		return
+	}
+	w.blocked = false
 	w.logs <- log
 }
 

@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/segmentio/kafka-go"
-	"github.com/viabtc/go-project/services/accessws/internal/handler"
-	"github.com/viabtc/go-project/services/accessws/internal/model"
-	"github.com/viabtc/go-project/services/accessws/internal/rpc"
-	"github.com/viabtc/go-project/services/accessws/internal/subscription"
+	"github.com/teachain/exchange_server/services/accessws/internal/handler"
+	"github.com/teachain/exchange_server/services/accessws/internal/model"
+	"github.com/teachain/exchange_server/services/accessws/internal/rpc"
+	"github.com/teachain/exchange_server/services/accessws/internal/subscription"
 )
 
 type Consumer struct {
@@ -142,8 +142,13 @@ func (c *Consumer) processNotifications() {
 func (c *Consumer) sendNotification(notif *Notification) {
 	switch notif.Method {
 	case "order.update":
-		subs := c.subMgr.GetOrderSubscribers(notif.UserID)
-		handler.BroadcastToSessions(subs, "order.update", notif.Params)
+		if notif.Market != "" {
+			subs := c.subMgr.GetOrderSubscribers(notif.UserID, notif.Market)
+			handler.BroadcastToSessions(subs, "order.update", notif.Params)
+		} else {
+			subs := c.subMgr.GetAllOrderSubscribers(notif.UserID)
+			handler.BroadcastToSessions(subs, "order.update", notif.Params)
+		}
 	case "asset.update":
 		subs := c.subMgr.GetAssetSubscribers(notif.UserID, notif.Asset)
 		handler.BroadcastToSessions(subs, "asset.update", notif.Params)
@@ -166,6 +171,7 @@ func (c *Consumer) processOrdersMessage(data []byte) {
 		Method: "order.update",
 		Params: event,
 		UserID: event.Order.UserID,
+		Market: event.Order.Market,
 	}
 
 	c.notifyCh <- &Notification{

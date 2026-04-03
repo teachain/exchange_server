@@ -1,4 +1,4 @@
-module github.com/viabtc/go-project/internal/config
+module github.com/teachain/exchange_server/internal/config
 
 go 1.24.0
 

@@ -7,8 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/matchengine/internal/engine"
-	"github.com/viabtc/go-project/services/matchengine/internal/order"
+	"github.com/teachain/exchange_server/services/matchengine/internal/engine"
+	"github.com/teachain/exchange_server/services/matchengine/internal/order"
 )
 
 type Server struct {

@@ -12,12 +12,12 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/viabtc/go-project/internal/alert"
-	"github.com/viabtc/go-project/internal/utils"
-	"github.com/viabtc/go-project/services/accessws/internal/config"
-	"github.com/viabtc/go-project/services/accessws/internal/kafka"
-	"github.com/viabtc/go-project/services/accessws/internal/logging"
-	"github.com/viabtc/go-project/services/accessws/internal/server"
+	"github.com/teachain/exchange_server/internal/alert"
+	"github.com/teachain/exchange_server/internal/utils"
+	"github.com/teachain/exchange_server/services/accessws/internal/config"
+	"github.com/teachain/exchange_server/services/accessws/internal/kafka"
+	"github.com/teachain/exchange_server/services/accessws/internal/logging"
+	"github.com/teachain/exchange_server/services/accessws/internal/server"
 )
 
 var logger *logging.Logger

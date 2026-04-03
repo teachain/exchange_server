@@ -1,0 +1,11 @@
+services/accesshttp/accesshttp
+services/accesshttp/accesshttp_test_build
+services/accessws/accessws
+services/accessws/accessws_new
+services/alertcenter/alertcenter
+services/marketprice/marketprice
+services/matchengine/matchengine
+services/readhistory/readhistory
+services/readhistory/main
+
+*.log

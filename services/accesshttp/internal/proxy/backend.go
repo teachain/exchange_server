@@ -7,10 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
-	"github.com/viabtc/go-project/services/accesshttp/internal/config"
-	"github.com/viabtc/go-project/services/accesshttp/internal/model"
+	"github.com/teachain/exchange_server/services/accesshttp/internal/config"
+	"github.com/teachain/exchange_server/services/accesshttp/internal/model"
 )
 
 type BackendProxy struct {
@@ -18,6 +19,8 @@ type BackendProxy struct {
 	marketpricePool *Pool
 	readhistoryPool *Pool
 	timeout         time.Duration
+	stopCh          chan struct{}
+	wg              sync.WaitGroup
 }
 
 func NewBackendProxy(cfg *config.Config) *BackendProxy {
@@ -26,7 +29,46 @@ func NewBackendProxy(cfg *config.Config) *BackendProxy {
 		marketpricePool: NewPool("http://"+cfg.Backend.MarketPrice, 10),
 		readhistoryPool: NewPool("http://"+cfg.Backend.ReadHistory, 10),
 		timeout:         cfg.Timeout,
+		stopCh:          make(chan struct{}),
 	}
+}
+
+func (p *BackendProxy) StartHealthCheck(interval time.Duration) {
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		p.checkAllBackends()
+		for {
+			select {
+			case <-ticker.C:
+				p.checkAllBackends()
+			case <-p.stopCh:
+				return
+			}
+		}
+	}()
+}
+
+func (p *BackendProxy) checkAllBackends() {
+	p.matchenginePool.CheckHealth()
+	p.marketpricePool.CheckHealth()
+	p.readhistoryPool.CheckHealth()
+}
+
+func (p *BackendProxy) GetBackendStatus() map[string]bool {
+	return map[string]bool{
+		"matchengine": p.matchenginePool.IsAvailable(),
+		"marketprice": p.marketpricePool.IsAvailable(),
+		"readhistory": p.readhistoryPool.IsAvailable(),
+	}
+}
+
+func (p *BackendProxy) Stop() {
+	close(p.stopCh)
+	p.wg.Wait()
 }
 
 func (p *BackendProxy) GetTimeout() time.Duration {
@@ -190,6 +232,13 @@ func (p *BackendProxy) ForwardToReadHistory(ctx context.Context, req *model.JSON
 }
 
 func (p *BackendProxy) forward(ctx context.Context, pool *Pool, req *model.JSONRPCRequest) (interface{}, error) {
+	if !pool.IsAvailable() {
+		return nil, &model.RPCError{
+			Code:    -32003,
+			Message: "Backend unavailable",
+		}
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
@@ -223,6 +272,7 @@ func (p *BackendProxy) forward(ctx context.Context, pool *Pool, req *model.JSONR
 }
 
 func (p *BackendProxy) Close() {
+	p.Stop()
 	p.matchenginePool.Close()
 	p.marketpricePool.Close()
 	p.readhistoryPool.Close()

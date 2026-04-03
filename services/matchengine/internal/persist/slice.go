@@ -12,8 +12,8 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/matchengine/internal/balance"
-	"github.com/viabtc/go-project/services/matchengine/internal/order"
+	"github.com/teachain/exchange_server/services/matchengine/internal/balance"
+	"github.com/teachain/exchange_server/services/matchengine/internal/order"
 )
 
 type SliceManager struct {

@@ -1,4 +1,4 @@
-module github.com/viabtc/go-project/services/readhistory
+module github.com/teachain/exchange_server/services/readhistory
 
 go 1.25.0
 
@@ -8,8 +8,8 @@ require (
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/shopspring/decimal v1.3.1
 	github.com/spf13/viper v1.18.2
-	github.com/viabtc/go-project v0.0.0-00010101000000-000000000000
-	github.com/viabtc/go-project/internal/alert v0.0.0-00010101000000-000000000000
+	github.com/teachain/exchange_server v0.0.0-00010101000000-000000000000
+	github.com/teachain/exchange_server/internal/alert v0.0.0-00010101000000-000000000000
 	golang.org/x/sys v0.41.0
 )
 
@@ -59,6 +59,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/viabtc/go-project => ../../
+replace github.com/teachain/exchange_server => ../../
 
-replace github.com/viabtc/go-project/internal/alert => ../../internal/alert
+replace github.com/teachain/exchange_server/internal/alert => ../../internal/alert

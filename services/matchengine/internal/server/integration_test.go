@@ -12,8 +12,8 @@ import (
 
 	"github.com/shopspring/decimal"
 	"github.com/spf13/viper"
-	"github.com/viabtc/go-project/services/matchengine/internal/engine"
-	"github.com/viabtc/go-project/services/matchengine/internal/order"
+	"github.com/teachain/exchange_server/services/matchengine/internal/engine"
+	"github.com/teachain/exchange_server/services/matchengine/internal/order"
 )
 
 type RPCClient struct {

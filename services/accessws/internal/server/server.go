@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/viabtc/go-project/services/accessws/internal/auth"
-	"github.com/viabtc/go-project/services/accessws/internal/cache"
-	"github.com/viabtc/go-project/services/accessws/internal/config"
-	"github.com/viabtc/go-project/services/accessws/internal/handler"
-	"github.com/viabtc/go-project/services/accessws/internal/model"
-	"github.com/viabtc/go-project/services/accessws/internal/rpc"
-	"github.com/viabtc/go-project/services/accessws/internal/subscription"
+	"github.com/teachain/exchange_server/services/accessws/internal/auth"
+	"github.com/teachain/exchange_server/services/accessws/internal/cache"
+	"github.com/teachain/exchange_server/services/accessws/internal/config"
+	"github.com/teachain/exchange_server/services/accessws/internal/handler"
+	"github.com/teachain/exchange_server/services/accessws/internal/model"
+	"github.com/teachain/exchange_server/services/accessws/internal/rpc"
+	"github.com/teachain/exchange_server/services/accessws/internal/subscription"
 )
 
 var upgrader = websocket.Upgrader{
@@ -72,9 +72,9 @@ func NewWSServer(cfg *config.Config) (*WSServer, error) {
 	mpAddr := fmt.Sprintf("%s:%d", cfg.MarketPrice.Host, cfg.MarketPrice.Port)
 	rhAddr := fmt.Sprintf("%s:%d", cfg.ReadHistory.Host, cfg.ReadHistory.Port)
 	timeout := time.Duration(cfg.MatchEngine.Timeout * float64(time.Second))
-	s.rpcClient = rpc.NewRPCClient(meAddr, mpAddr, rhAddr, timeout)
+	s.rpcClient = rpc.NewRPCClient(meAddr, mpAddr, rhAddr, timeout, cfg.CacheTimeout)
 
-	s.authService = auth.NewAuthService(cfg.AuthURL, cfg.SignURL)
+	s.authService = auth.NewAuthService(cfg.AuthURL, cfg.SignURL, cfg.CacheTimeout)
 	s.serverHandler = handler.NewServerHandler(s.authService)
 	s.orderHandler = handler.NewOrderHandler(s.rpcClient, s.subMgr)
 	s.assetHandler = handler.NewAssetHandler(s.rpcClient, s.subMgr)
@@ -172,7 +172,7 @@ func (s *WSServer) removeSession(sess *model.ClientSession) {
 	s.sesMu.Unlock()
 
 	sess.Dead = true
-	s.subMgr.OrderUnsubscribe(sess)
+	s.subMgr.OrderUnsubscribeAll(sess)
 	s.subMgr.DepthUnsubscribe(sess)
 	s.subMgr.KlineUnsubscribe(sess)
 	s.subMgr.PriceUnsubscribe(sess)
@@ -294,6 +294,9 @@ func (s *WSServer) startTimers() {
 }
 
 func (s *WSServer) pollDepth() {
+	currentTime := time.Now().Unix()
+	cleanInterval := int64(s.config.Intervals.CleanInterval)
+
 	for key := range s.subMgr.GetAllDepthSubs() {
 		parts := splitKey(key)
 		if len(parts) != 3 {
@@ -334,8 +337,12 @@ func (s *WSServer) pollDepth() {
 
 		subs := s.subMgr.GetDepthSubscribers(key)
 
-		if oldSnapshot == nil {
+		lastClean := s.subMgr.GetDepthLastClean(key)
+		needClean := cleanInterval > 0 && (currentTime-lastClean) >= cleanInterval
+
+		if oldSnapshot == nil || needClean {
 			handler.BroadcastToSessions(subs, "depth.update", json.RawMessage(resp.Body))
+			s.subMgr.SetDepthLastClean(key, currentTime)
 		} else {
 			diff := computeDepthDiffModel(oldSnapshot, newSnapshot)
 			diffJSON, _ := json.Marshal(diff)

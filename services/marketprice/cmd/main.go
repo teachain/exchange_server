@@ -12,12 +12,12 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/spf13/viper"
-	"github.com/viabtc/go-project/internal/alert"
-	"github.com/viabtc/go-project/internal/utils"
-	"github.com/viabtc/go-project/services/marketprice/internal/cache"
-	appLog "github.com/viabtc/go-project/services/marketprice/internal/log"
-	"github.com/viabtc/go-project/services/marketprice/internal/market"
-	"github.com/viabtc/go-project/services/marketprice/internal/server"
+	"github.com/teachain/exchange_server/internal/alert"
+	"github.com/teachain/exchange_server/internal/utils"
+	"github.com/teachain/exchange_server/services/marketprice/internal/cache"
+	appLog "github.com/teachain/exchange_server/services/marketprice/internal/log"
+	"github.com/teachain/exchange_server/services/marketprice/internal/market"
+	"github.com/teachain/exchange_server/services/marketprice/internal/server"
 )
 
 func setFileLimit(max uint64) {
@@ -95,12 +95,25 @@ func main() {
 	redisHost := viper.GetString("redis.host")
 	redisPort := viper.GetInt("redis.port")
 	redisPassword := viper.GetString("redis.password")
+	redisDB := viper.GetInt("redis.db")
 	redisAddr := fmt.Sprintf("%s:%d", redisHost, redisPort)
 
-	redisCache, err := cache.NewRedisCacheWithPassword(redisAddr, redisPassword, 0)
-	if err != nil {
-		alerter.SendAlert("redis connection failed: %v", err)
-		fmt.Println("create redis cache failed:", err.Error())
+	sentinelEnabled := viper.GetBool("redis.sentinel.enabled")
+	sentinelMaster := viper.GetString("redis.sentinel.master")
+	sentinelAddrs := viper.GetStringSlice("redis.sentinel.addrs")
+
+	var redisCache *cache.RedisCache
+	var redisErr error
+
+	if sentinelEnabled && len(sentinelAddrs) > 0 {
+		redisCache, redisErr = cache.NewRedisCacheWithSentinel(sentinelMaster, sentinelAddrs, redisPassword, redisDB)
+	} else {
+		redisCache, redisErr = cache.NewRedisCacheWithPassword(redisAddr, redisPassword, redisDB)
+	}
+
+	if redisErr != nil {
+		alerter.SendAlert("redis connection failed: %v", redisErr)
+		fmt.Println("create redis cache failed:", redisErr.Error())
 		os.Exit(1)
 	}
 

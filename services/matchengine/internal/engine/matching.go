@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/matchengine/internal/order"
-	"github.com/viabtc/go-project/services/matchengine/internal/persist"
+	"github.com/teachain/exchange_server/services/matchengine/internal/order"
+	"github.com/teachain/exchange_server/services/matchengine/internal/persist"
 )
 
 var TakerFeeRate = decimal.NewFromFloat(0.001)
@@ -143,6 +143,7 @@ func (e *Engine) matchAsTaker(incoming *order.Order, makerQueue *order.PriceQueu
 		if maker.Left.IsZero() || maker.Left.IsNegative() {
 			heap.Pop(makerQueue)
 			ob.Remove(maker.ID)
+			e.removeFromUserIndex(maker.UserID, maker.ID)
 		}
 	}
 
@@ -181,6 +182,50 @@ func (e *Engine) settleTrade(trade *Trade) {
 			e.producer.SendBalanceUpdateAsync(trade.MakerUserID, market.Stock, trade.Amount.Sub(trade.MakerFee))
 		}
 	}
+
+	e.checkStopOrdersAfterTrade(trade.Market, trade.Price)
+}
+
+func (e *Engine) checkStopOrdersAfterTrade(market string, lastPrice decimal.Decimal) {
+	triggeredOrders := e.stopMgr.CheckStopOrders(market, lastPrice)
+	if len(triggeredOrders) == 0 {
+		return
+	}
+
+	for i := range triggeredOrders {
+		o := triggeredOrders[i]
+		ob := e.getOrCreateOrderBookLocked(o.Market)
+
+		o.ID = e.idGenerator.NextID()
+		o.Status = order.OrderStatusPending
+		o.CreateTime = time.Now()
+		o.UpdateTime = time.Now()
+
+		e.matchAndSettle(ob, &o)
+	}
+}
+
+func (e *Engine) matchAndSettle(ob *order.OrderBook, incoming *order.Order) []*Trade {
+	var trades []*Trade
+
+	if incoming.Side == order.SideBid {
+		trades = e.matchAsTaker(incoming, ob.Asks, ob)
+	} else {
+		trades = e.matchAsTaker(incoming, ob.Bids, ob)
+	}
+
+	if incoming.Left.LessThan(incoming.Amount) && incoming.Left.IsPositive() {
+		incoming.Status = order.OrderStatusPartial
+		if incoming.Left.Equal(incoming.Amount) {
+			incoming.Status = order.OrderStatusPending
+		}
+		ob.Add(incoming)
+	} else {
+		incoming.Status = order.OrderStatusFinished
+		incoming.UpdateTime = time.Now()
+	}
+
+	return trades
 }
 
 func (e *Engine) PutOrderNoLock(incoming *order.Order) ([]*Trade, error) {
@@ -194,6 +239,7 @@ func (e *Engine) PutOrderNoLock(incoming *order.Order) ([]*Trade, error) {
 	if incoming.Left.IsPositive() && !incoming.IsFinished() {
 		incoming.Status = order.OrderStatusPartial
 		ob.Add(incoming)
+		e.addToUserIndex(incoming)
 	}
 
 	return trades, nil
@@ -218,6 +264,7 @@ func (e *Engine) CancelOrder(orderID uint64, market string) error {
 	}
 
 	ob.Remove(orderID)
+	e.removeFromUserIndex(ord.UserID, orderID)
 
 	marketConfig, ok := e.GetMarket(ord.Market)
 	if !ok {

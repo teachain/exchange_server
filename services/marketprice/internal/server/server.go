@@ -8,11 +8,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/marketprice/internal/cache"
-	"github.com/viabtc/go-project/services/marketprice/internal/consumer"
-	"github.com/viabtc/go-project/services/marketprice/internal/kline"
-	"github.com/viabtc/go-project/services/marketprice/internal/market"
-	"github.com/viabtc/go-project/services/marketprice/internal/model"
+	"github.com/teachain/exchange_server/services/marketprice/internal/cache"
+	"github.com/teachain/exchange_server/services/marketprice/internal/consumer"
+	"github.com/teachain/exchange_server/services/marketprice/internal/kline"
+	"github.com/teachain/exchange_server/services/marketprice/internal/market"
+	"github.com/teachain/exchange_server/services/marketprice/internal/model"
 )
 
 const (

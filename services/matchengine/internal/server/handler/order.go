@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/matchengine/internal/engine"
-	"github.com/viabtc/go-project/services/matchengine/internal/order"
-	"github.com/viabtc/go-project/services/matchengine/internal/server"
+	"github.com/teachain/exchange_server/services/matchengine/internal/engine"
+	"github.com/teachain/exchange_server/services/matchengine/internal/order"
+	"github.com/teachain/exchange_server/services/matchengine/internal/server"
 )
 
 const (
@@ -22,6 +22,7 @@ const (
 	CMD_ORDER_HISTORY         = 208
 	CMD_ORDER_DEALS           = 209
 	CMD_ORDER_DETAIL_FINISHED = 210
+	CMD_ORDER_PUT_STOP        = 211
 )
 
 type OrderInfo struct {
@@ -893,6 +894,104 @@ func tradesToInfos(trades []*engine.Trade) []TradeInfo {
 	return result
 }
 
+func HandleOrderPutStop(s *server.RPCServer, pkg *server.RPCPkg) ([]byte, error) {
+	var params []interface{}
+	if err := json.Unmarshal(pkg.Body, &params); err != nil {
+		return nil, fmt.Errorf("invalid params: %w", err)
+	}
+
+	if len(params) != 9 {
+		return nil, fmt.Errorf("invalid arguments: expected 9 params")
+	}
+
+	userID, ok := params[0].(float64)
+	if !ok {
+		return nil, fmt.Errorf("invalid user_id")
+	}
+
+	market, ok := params[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid market")
+	}
+
+	sideVal, ok := params[2].(float64)
+	if !ok {
+		return nil, fmt.Errorf("invalid side")
+	}
+	side := order.Side(int(sideVal))
+	if side != order.SideBid && side != order.SideAsk {
+		return nil, fmt.Errorf("invalid side value")
+	}
+
+	stopPriceStr, ok := params[3].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid stop_price")
+	}
+	stopPrice, err := decimal.NewFromString(stopPriceStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid stop_price format")
+	}
+
+	amountStr, ok := params[4].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid amount")
+	}
+	amount, err := decimal.NewFromString(amountStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid amount format")
+	}
+
+	takerFeeStr, ok := params[5].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid taker_fee")
+	}
+	takerFee, err := decimal.NewFromString(takerFeeStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid taker_fee format")
+	}
+
+	source, ok := params[6].(string)
+	if !ok {
+		source = ""
+	}
+
+	_, ok = params[7].(float64)
+	if !ok {
+		return nil, fmt.Errorf("invalid stop_type")
+	}
+
+	_, ok = params[8].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid trigger_price")
+	}
+
+	eng := s.GetEngine()
+
+	stopOrder := &order.Order{
+		UserID:     uint32(userID),
+		Market:     market,
+		Side:       side,
+		Type:       order.OrderTypeStopLimit,
+		Price:      stopPrice,
+		Amount:     amount,
+		Left:       amount,
+		TakerFee:   takerFee,
+		Status:     order.OrderStatusPending,
+		CreateTime: time.Now(),
+		UpdateTime: time.Now(),
+		Source:     source,
+	}
+
+	eng.AddStopOrder(stopOrder, stopPrice)
+
+	result := map[string]interface{}{
+		"order_id":   stopOrder.ID,
+		"stop_price": stopPrice.String(),
+	}
+
+	return json.Marshal(result)
+}
+
 func RegisterOrderHandlers(s *server.RPCServer) {
 	s.Handle(CMD_ORDER_PUT_LIMIT, HandleOrderPutLimit)
 	s.Handle(CMD_ORDER_PUT_MARKET, HandleOrderPutMarket)
@@ -904,4 +1003,5 @@ func RegisterOrderHandlers(s *server.RPCServer) {
 	s.Handle(CMD_ORDER_HISTORY, HandleOrderHistory)
 	s.Handle(CMD_ORDER_DEALS, HandleOrderDeals)
 	s.Handle(CMD_ORDER_DETAIL_FINISHED, HandleOrderDetailFinished)
+	s.Handle(CMD_ORDER_PUT_STOP, HandleOrderPutStop)
 }

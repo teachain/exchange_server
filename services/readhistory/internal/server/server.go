@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/viabtc/go-project/services/readhistory/internal/reader"
+	"github.com/teachain/exchange_server/services/readhistory/internal/reader"
 )
 
 type HandlerFunc func(s *Server, pkg *RPCPkg) ([]byte, error)

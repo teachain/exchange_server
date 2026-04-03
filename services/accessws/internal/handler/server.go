@@ -3,8 +3,8 @@ package handler
 import (
 	"encoding/json"
 	"github.com/gorilla/websocket"
-	"github.com/viabtc/go-project/services/accessws/internal/auth"
-	"github.com/viabtc/go-project/services/accessws/internal/model"
+	"github.com/teachain/exchange_server/services/accessws/internal/auth"
+	"github.com/teachain/exchange_server/services/accessws/internal/model"
 	"time"
 )
 

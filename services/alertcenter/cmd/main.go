@@ -12,10 +12,10 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/viper"
-	"github.com/viabtc/go-project/internal/utils"
-	"github.com/viabtc/go-project/services/alertcenter/internal/alerter"
-	rotatelog "github.com/viabtc/go-project/services/alertcenter/internal/log"
-	"github.com/viabtc/go-project/services/alertcenter/internal/server"
+	"github.com/teachain/exchange_server/internal/utils"
+	"github.com/teachain/exchange_server/services/alertcenter/internal/alerter"
+	rotatelog "github.com/teachain/exchange_server/services/alertcenter/internal/log"
+	"github.com/teachain/exchange_server/services/alertcenter/internal/server"
 	"golang.org/x/sys/unix"
 )
 

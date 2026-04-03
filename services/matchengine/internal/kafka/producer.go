@@ -8,8 +8,8 @@ import (
 
 	"github.com/segmentio/kafka-go"
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/matchengine/internal/engine"
-	orderpkg "github.com/viabtc/go-project/services/matchengine/internal/order"
+	"github.com/teachain/exchange_server/services/matchengine/internal/engine"
+	orderpkg "github.com/teachain/exchange_server/services/matchengine/internal/order"
 )
 
 const (

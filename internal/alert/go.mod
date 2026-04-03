@@ -1,3 +1,3 @@
-module github.com/viabtc/go-project/internal/alert
+module github.com/teachain/exchange_server/internal/alert
 
 go 1.21

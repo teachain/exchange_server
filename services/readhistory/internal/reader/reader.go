@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/viabtc/go-project/services/readhistory/internal/model"
+	"github.com/teachain/exchange_server/services/readhistory/internal/model"
 )
 
 type Reader struct {

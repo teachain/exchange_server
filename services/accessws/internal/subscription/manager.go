@@ -1,13 +1,13 @@
 package subscription
 
 import (
-	"github.com/viabtc/go-project/services/accessws/internal/model"
+	"github.com/teachain/exchange_server/services/accessws/internal/model"
 	"strconv"
 	"sync"
 )
 
 type Manager struct {
-	orderSubs      map[uint32]map[*model.ClientSession]bool
+	orderSubs      map[uint32]map[string]map[*model.ClientSession]bool
 	assetSubs      map[string]map[*model.ClientSession]bool
 	depthSubs      map[string]map[*model.ClientSession]bool
 	klineSubs      map[string]map[*model.ClientSession]bool
@@ -17,6 +17,8 @@ type Manager struct {
 	todaySubs      map[string]map[*model.ClientSession]bool
 	depthSnapshots map[string]*model.DepthSnapshot
 	depthSnapMu    sync.RWMutex
+	depthLastClean map[string]int64
+	depthCleanMu   sync.RWMutex
 	dealsBuffers   map[string]*model.DealsBuffer
 	dealsBufMu     sync.RWMutex
 	mu             sync.RWMutex
@@ -24,7 +26,7 @@ type Manager struct {
 
 func NewManager() *Manager {
 	return &Manager{
-		orderSubs:      make(map[uint32]map[*model.ClientSession]bool),
+		orderSubs:      make(map[uint32]map[string]map[*model.ClientSession]bool),
 		assetSubs:      make(map[string]map[*model.ClientSession]bool),
 		depthSubs:      make(map[string]map[*model.ClientSession]bool),
 		klineSubs:      make(map[string]map[*model.ClientSession]bool),
@@ -33,6 +35,7 @@ func NewManager() *Manager {
 		stateSubs:      make(map[string]map[*model.ClientSession]bool),
 		todaySubs:      make(map[string]map[*model.ClientSession]bool),
 		depthSnapshots: make(map[string]*model.DepthSnapshot),
+		depthLastClean: make(map[string]int64),
 		dealsBuffers:   make(map[string]*model.DealsBuffer),
 	}
 }
@@ -49,36 +52,83 @@ func klineKey(market, interval string) string {
 	return market + ":" + interval
 }
 
-func (m *Manager) OrderSubscribe(sess *model.ClientSession) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.orderSubs[sess.UserID] == nil {
-		m.orderSubs[sess.UserID] = make(map[*model.ClientSession]bool)
-	}
-	m.orderSubs[sess.UserID][sess] = true
+func orderKey(userID uint32, market string) string {
+	return strconv.FormatUint(uint64(userID), 10) + ":" + market
 }
 
-func (m *Manager) OrderUnsubscribe(sess *model.ClientSession) {
+func (m *Manager) OrderSubscribe(sess *model.ClientSession, market string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	key := orderKey(sess.UserID, market)
+	if m.orderSubs[sess.UserID] == nil {
+		m.orderSubs[sess.UserID] = make(map[string]map[*model.ClientSession]bool)
+	}
+	if m.orderSubs[sess.UserID][key] == nil {
+		m.orderSubs[sess.UserID][key] = make(map[*model.ClientSession]bool)
+	}
+	m.orderSubs[sess.UserID][key][sess] = true
+}
+
+func (m *Manager) OrderUnsubscribe(sess *model.ClientSession, market string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := orderKey(sess.UserID, market)
 	if subs, ok := m.orderSubs[sess.UserID]; ok {
-		delete(subs, sess)
-		if len(subs) == 0 {
-			delete(m.orderSubs, sess.UserID)
+		if marketSubs, ok := subs[key]; ok {
+			delete(marketSubs, sess)
+			if len(marketSubs) == 0 {
+				delete(subs, key)
+			}
+			if len(subs) == 0 {
+				delete(m.orderSubs, sess.UserID)
+			}
 		}
 	}
 }
 
-func (m *Manager) GetOrderSubscribers(userID uint32) []*model.ClientSession {
+func (m *Manager) GetOrderSubscribers(userID uint32, market string) []*model.ClientSession {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	key := orderKey(userID, market)
+	var result []*model.ClientSession
+	if subs, ok := m.orderSubs[userID]; ok {
+		if marketSubs, ok := subs[key]; ok {
+			for sess := range marketSubs {
+				result = append(result, sess)
+			}
+		}
+	}
+	return result
+}
+
+func (m *Manager) GetAllOrderSubscribers(userID uint32) []*model.ClientSession {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	var result []*model.ClientSession
 	if subs, ok := m.orderSubs[userID]; ok {
-		for sess := range subs {
-			result = append(result, sess)
+		for _, marketSubs := range subs {
+			for sess := range marketSubs {
+				result = append(result, sess)
+			}
 		}
 	}
 	return result
+}
+
+func (m *Manager) OrderUnsubscribeAll(sess *model.ClientSession) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if subs, ok := m.orderSubs[sess.UserID]; ok {
+		for key, marketSubs := range subs {
+			delete(marketSubs, sess)
+			if len(marketSubs) == 0 {
+				delete(subs, key)
+			}
+		}
+		if len(subs) == 0 {
+			delete(m.orderSubs, sess.UserID)
+		}
+	}
 }
 
 func (m *Manager) AssetSubscribe(sess *model.ClientSession, asset string) {
@@ -380,6 +430,18 @@ func (m *Manager) SetDepthSnapshot(key string, snap *model.DepthSnapshot) {
 	m.depthSnapMu.Lock()
 	defer m.depthSnapMu.Unlock()
 	m.depthSnapshots[key] = snap
+}
+
+func (m *Manager) GetDepthLastClean(key string) int64 {
+	m.depthCleanMu.RLock()
+	defer m.depthCleanMu.RUnlock()
+	return m.depthLastClean[key]
+}
+
+func (m *Manager) SetDepthLastClean(key string, timestamp int64) {
+	m.depthCleanMu.Lock()
+	defer m.depthCleanMu.Unlock()
+	m.depthLastClean[key] = timestamp
 }
 
 func (m *Manager) GetDealsBuffer(market string) *model.DealsBuffer {

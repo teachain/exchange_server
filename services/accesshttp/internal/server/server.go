@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/viabtc/go-project/services/accesshttp/internal/config"
-	"github.com/viabtc/go-project/services/accesshttp/internal/handler"
-	"github.com/viabtc/go-project/services/accesshttp/internal/proxy"
+	"github.com/teachain/exchange_server/services/accesshttp/internal/config"
+	"github.com/teachain/exchange_server/services/accesshttp/internal/handler"
+	"github.com/teachain/exchange_server/services/accesshttp/internal/proxy"
 )
 
 type Server struct {
@@ -16,15 +16,20 @@ type Server struct {
 	httpSrv *http.Server
 	router  *gin.Engine
 	handler *handler.Handler
+	proxy   *proxy.BackendProxy
 }
 
-func New(cfg *config.Config) *Server {
-	proxy := proxy.NewBackendProxy(cfg)
+func New(cfg *config.Config, proxy *proxy.BackendProxy) *Server {
 	return &Server{
 		cfg:     cfg,
 		router:  gin.Default(),
 		handler: handler.New(proxy),
+		proxy:   proxy,
 	}
+}
+
+func (s *Server) GetBackendProxy() *proxy.BackendProxy {
+	return s.proxy
 }
 
 func (s *Server) Start() error {

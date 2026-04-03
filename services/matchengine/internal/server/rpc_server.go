@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/viabtc/go-project/services/matchengine/internal/engine"
+	"github.com/teachain/exchange_server/services/matchengine/internal/engine"
 )
 
 type RPCServer struct {

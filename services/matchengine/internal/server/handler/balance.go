@@ -8,9 +8,9 @@ import (
 	"strconv"
 
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/matchengine/internal/balance"
-	"github.com/viabtc/go-project/services/matchengine/internal/model"
-	"github.com/viabtc/go-project/services/matchengine/internal/server"
+	"github.com/teachain/exchange_server/services/matchengine/internal/balance"
+	"github.com/teachain/exchange_server/services/matchengine/internal/model"
+	"github.com/teachain/exchange_server/services/matchengine/internal/server"
 )
 
 const (

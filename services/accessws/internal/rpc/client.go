@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/teachain/exchange_server/services/accessws/internal/cache"
 )
 
 type Client struct {
@@ -69,20 +71,24 @@ type RPCCLient struct {
 	readHistory string
 	timeout     time.Duration
 	lastReqID   uint64
-	reqIDMu     sync.Mutex
+	reqIdMu     sync.Mutex
+	cacheTTL    time.Duration
 
 	meClient  *Client
 	mpClient  *Client
 	rhClient  *Client
 	clientsMu sync.Mutex
+	cache     *cache.DictCache
 }
 
-func NewRPCClient(matchEngine, marketPrice, readHistory string, timeout time.Duration) *RPCCLient {
+func NewRPCClient(matchEngine, marketPrice, readHistory string, timeout time.Duration, cacheTTL float64) *RPCCLient {
 	return &RPCCLient{
 		matchEngine: matchEngine,
 		marketPrice: marketPrice,
 		readHistory: readHistory,
 		timeout:     timeout,
+		cacheTTL:    time.Duration(cacheTTL * float64(time.Second)),
+		cache:       cache.NewDictCache(time.Duration(cacheTTL * float64(time.Second))),
 	}
 }
 
@@ -153,9 +159,9 @@ func (r *RPCCLient) Close() {
 }
 
 func (r *RPCCLient) NextReqID() uint64 {
-	r.reqIDMu.Lock()
+	r.reqIdMu.Lock()
 	id := atomic.AddUint64(&r.lastReqID, 1)
-	r.reqIDMu.Unlock()
+	r.reqIdMu.Unlock()
 	return id
 }
 
@@ -168,11 +174,34 @@ func (r *RPCCLient) QueryMatchEngine(cmd uint32, body []byte) (*Package, error) 
 }
 
 func (r *RPCCLient) QueryMarketPrice(cmd uint32, body []byte) (*Package, error) {
+	if r.cache != nil && r.isCacheable(cmd) {
+		if cached, ok := r.cache.Get(cmd, body); ok {
+			return &Package{Body: cached}, nil
+		}
+	}
+
 	client, err := r.getMarketPriceClient()
 	if err != nil {
 		return nil, err
 	}
-	return client.Send(cmd, r.NextReqID(), body)
+	resp, err := client.Send(cmd, r.NextReqID(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.cache != nil && r.isCacheable(cmd) {
+		r.cache.Set(cmd, body, resp.Body)
+	}
+	return resp, nil
+}
+
+func (r *RPCCLient) isCacheable(cmd uint32) bool {
+	switch cmd {
+	case CMD_MARKET_STATUS, CMD_MARKET_KLINE, CMD_MARKET_STATUS_TODAY:
+		return true
+	default:
+		return false
+	}
 }
 
 func (r *RPCCLient) QueryReadHistory(cmd uint32, body []byte) (*Package, error) {

@@ -1,4 +1,4 @@
-module github.com/viabtc/go-project/internal/redis
+module github.com/teachain/exchange_server/internal/redis
 
 go 1.21
 

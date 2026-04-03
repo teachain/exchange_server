@@ -1,4 +1,4 @@
-module github.com/viabtc/go-project/internal/database
+module github.com/teachain/exchange_server/internal/database
 
 go 1.21
 

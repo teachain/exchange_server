@@ -5,8 +5,8 @@ import (
 	"errors"
 	"log"
 
-	"github.com/viabtc/go-project/services/readhistory/internal/reader"
-	"github.com/viabtc/go-project/services/readhistory/internal/server"
+	"github.com/teachain/exchange_server/services/readhistory/internal/reader"
+	"github.com/teachain/exchange_server/services/readhistory/internal/server"
 )
 
 func logDebugBalance(s *server.Server, format string, v ...interface{}) {

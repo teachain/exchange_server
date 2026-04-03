@@ -13,10 +13,11 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sys/unix"
 
-	"github.com/viabtc/go-project/internal/alert"
-	"github.com/viabtc/go-project/internal/utils"
-	"github.com/viabtc/go-project/services/accesshttp/internal/config"
-	"github.com/viabtc/go-project/services/accesshttp/internal/server"
+	"github.com/teachain/exchange_server/internal/alert"
+	"github.com/teachain/exchange_server/internal/utils"
+	"github.com/teachain/exchange_server/services/accesshttp/internal/config"
+	"github.com/teachain/exchange_server/services/accesshttp/internal/proxy"
+	"github.com/teachain/exchange_server/services/accesshttp/internal/server"
 )
 
 func setFileLimit(max uint64) {
@@ -67,13 +68,16 @@ func main() {
 	setFileLimit(1000000)
 	setCoreLimit(1000000000)
 
-	srv := server.New(cfg)
+	backendProxy := proxy.NewBackendProxy(cfg)
+	backendProxy.StartHealthCheck(10 * time.Second)
+
+	srv := server.New(cfg, backendProxy)
 
 	monitorAddr := viper.GetString("monitor.bind")
 	if monitorAddr == "" {
 		monitorAddr = ":8081"
 	}
-	monitorServer := server.NewMonitorServer(monitorAddr)
+	monitorServer := server.NewMonitorServer(monitorAddr, backendProxy)
 	go func() {
 		log.Printf("Monitor server listening on %s", monitorAddr)
 		if err := monitorServer.Start(); err != nil {
@@ -102,6 +106,8 @@ func main() {
 	defer cancel()
 
 	time.Sleep(5 * time.Second)
+
+	backendProxy.Close()
 
 	if err := monitorServer.Shutdown(); err != nil {
 		log.Printf("Monitor shutdown error: %v", err)

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/viabtc/go-project/services/accessws/internal/model"
+	"github.com/teachain/exchange_server/services/accessws/internal/cache"
+	"github.com/teachain/exchange_server/services/accessws/internal/model"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -13,6 +15,39 @@ type AuthService struct {
 	authURL    string
 	signURL    string
 	httpClient *http.Client
+	nonceCache *nonceCache
+}
+
+type nonceCache struct {
+	cache  *cache.Cache
+	mu     sync.Mutex
+	nonces map[string]bool
+}
+
+func newNonceCache(ttlSeconds float64) *nonceCache {
+	return &nonceCache{
+		cache:  cache.NewCache(ttlSeconds),
+		nonces: make(map[string]bool),
+	}
+}
+
+func (nc *nonceCache) isUsed(accessID, tonce string) bool {
+	key := accessID + ":" + tonce
+	if _, exists := nc.nonces[key]; exists {
+		return true
+	}
+	_, found := nc.cache.Get(key)
+	return found
+}
+
+func (nc *nonceCache) markUsed(accessID, tonce string) {
+	key := accessID + ":" + tonce
+	nc.nonces[key] = true
+	nc.cache.Set(key, []byte("1"))
+}
+
+func (nc *nonceCache) clear(nonce string) {
+	delete(nc.nonces, nonce)
 }
 
 type AuthResponse struct {
@@ -24,11 +59,12 @@ type AuthData struct {
 	UserID uint32 `json:"user_id"`
 }
 
-func NewAuthService(authURL, signURL string) *AuthService {
+func NewAuthService(authURL, signURL string, nonceTTL float64) *AuthService {
 	return &AuthService{
 		authURL:    authURL,
 		signURL:    signURL,
 		httpClient: &http.Client{Timeout: 5 * time.Second},
+		nonceCache: newNonceCache(nonceTTL),
 	}
 }
 
@@ -98,10 +134,16 @@ func (s *AuthService) AuthenticateSession(sess *model.ClientSession, token, sour
 }
 
 func (s *AuthService) VerifySessionSignature(sess *model.ClientSession, accessID, authorisation, tonce string) error {
+	if s.nonceCache.isUsed(accessID, tonce) {
+		return fmt.Errorf("tonce already used")
+	}
+
 	data, err := s.VerifySignature(accessID, authorisation, tonce)
 	if err != nil {
 		return err
 	}
+
+	s.nonceCache.markUsed(accessID, tonce)
 	sess.Auth = true
 	sess.UserID = data.UserID
 	sess.Source = "api"

@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/marketprice/internal/cache"
-	"github.com/viabtc/go-project/services/marketprice/internal/model"
+	"github.com/teachain/exchange_server/services/marketprice/internal/cache"
+	"github.com/teachain/exchange_server/services/marketprice/internal/model"
 )
 
 const (

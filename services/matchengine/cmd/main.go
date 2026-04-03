@@ -11,13 +11,13 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/spf13/viper"
-	"github.com/viabtc/go-project/internal/alert"
-	"github.com/viabtc/go-project/internal/utils"
-	"github.com/viabtc/go-project/services/matchengine/internal/cli"
-	"github.com/viabtc/go-project/services/matchengine/internal/engine"
-	"github.com/viabtc/go-project/services/matchengine/internal/history"
-	"github.com/viabtc/go-project/services/matchengine/internal/persist"
-	"github.com/viabtc/go-project/services/matchengine/internal/server"
+	"github.com/teachain/exchange_server/internal/alert"
+	"github.com/teachain/exchange_server/internal/utils"
+	"github.com/teachain/exchange_server/services/matchengine/internal/cli"
+	"github.com/teachain/exchange_server/services/matchengine/internal/engine"
+	"github.com/teachain/exchange_server/services/matchengine/internal/history"
+	"github.com/teachain/exchange_server/services/matchengine/internal/persist"
+	"github.com/teachain/exchange_server/services/matchengine/internal/server"
 )
 
 func main() {

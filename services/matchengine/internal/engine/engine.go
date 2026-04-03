@@ -9,11 +9,11 @@ import (
 
 	"github.com/shopspring/decimal"
 	"github.com/spf13/viper"
-	"github.com/viabtc/go-project/services/matchengine/internal/balance"
-	"github.com/viabtc/go-project/services/matchengine/internal/history"
-	"github.com/viabtc/go-project/services/matchengine/internal/model"
-	"github.com/viabtc/go-project/services/matchengine/internal/order"
-	"github.com/viabtc/go-project/services/matchengine/internal/persist"
+	"github.com/teachain/exchange_server/services/matchengine/internal/balance"
+	"github.com/teachain/exchange_server/services/matchengine/internal/history"
+	"github.com/teachain/exchange_server/services/matchengine/internal/model"
+	"github.com/teachain/exchange_server/services/matchengine/internal/order"
+	"github.com/teachain/exchange_server/services/matchengine/internal/persist"
 )
 
 type Trade struct {
@@ -55,6 +55,8 @@ type Engine struct {
 	stopMgr       *StopManager
 	operLogWriter *persist.OperLogWriter
 	historyWriter *history.HistoryWriter
+	userOrders    map[uint32]map[uint64]*order.Order
+	orderIndex    map[uint64]*order.Order
 }
 
 type OperLogReplayHandler struct {
@@ -144,6 +146,8 @@ func NewEngine() *Engine {
 		assets:      make(map[string]*model.AssetConfig),
 		orderTrades: make(map[uint64][]*Trade),
 		stopMgr:     NewStopManager(),
+		userOrders:  make(map[uint32]map[uint64]*order.Order),
+		orderIndex:  make(map[uint64]*order.Order),
 	}
 	e.LoadConfig()
 	return e
@@ -222,10 +226,8 @@ func (e *Engine) GetOrder(orderID uint64) (*order.Order, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	for _, ob := range e.orderBooks {
-		if ord, ok := ob.GetOrder(orderID); ok {
-			return ord, true
-		}
+	if ord, ok := e.orderIndex[orderID]; ok {
+		return ord, true
 	}
 	return nil, false
 }
@@ -278,6 +280,49 @@ func (e *Engine) GetAllAssets() []*model.AssetConfig {
 
 func (e *Engine) GetBalances() *balance.BalanceManager {
 	return e.balances
+}
+
+func (e *Engine) addToUserIndex(o *order.Order) {
+	if e.userOrders[o.UserID] == nil {
+		e.userOrders[o.UserID] = make(map[uint64]*order.Order)
+	}
+	e.userOrders[o.UserID][o.ID] = o
+	e.orderIndex[o.ID] = o
+}
+
+func (e *Engine) removeFromUserIndex(userID uint32, orderID uint64) {
+	if userOrders, ok := e.userOrders[userID]; ok {
+		delete(userOrders, orderID)
+		if len(userOrders) == 0 {
+			delete(e.userOrders, userID)
+		}
+	}
+	delete(e.orderIndex, orderID)
+}
+
+func (e *Engine) GetUserOrder(userID uint32, orderID uint64) (*order.Order, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if userOrders, ok := e.userOrders[userID]; ok {
+		if ord, ok := userOrders[orderID]; ok {
+			return ord, true
+		}
+	}
+	return nil, false
+}
+
+func (e *Engine) GetUserOrders(userID uint32) []*order.Order {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	var orders []*order.Order
+	if userOrders, ok := e.userOrders[userID]; ok {
+		for _, o := range userOrders {
+			orders = append(orders, o)
+		}
+	}
+	return orders
 }
 
 func (e *Engine) TradeChan() <-chan *Trade {
@@ -393,6 +438,20 @@ func (e *Engine) GetStopManager() *StopManager {
 	return e.stopMgr
 }
 
+func (e *Engine) IsOperLogBlocked() bool {
+	if e.operLogWriter == nil {
+		return false
+	}
+	return e.operLogWriter.IsBlocked()
+}
+
+func (e *Engine) GetOperLogQueueLength() int {
+	if e.operLogWriter == nil {
+		return 0
+	}
+	return e.operLogWriter.QueueLength()
+}
+
 func (e *Engine) SetOperLogWriter(operLogWriter *persist.OperLogWriter) {
 	e.operLogWriter = operLogWriter
 }
@@ -446,6 +505,20 @@ func (e *Engine) GetLastPrice(market string) decimal.Decimal {
 
 func (e *Engine) SetHistoryWriter(hw *history.HistoryWriter) {
 	e.historyWriter = hw
+}
+
+func (e *Engine) IsHistoryBlocked() bool {
+	if e.historyWriter == nil {
+		return false
+	}
+	return e.historyWriter.IsBlocked()
+}
+
+func (e *Engine) GetHistoryQueueLength() int {
+	if e.historyWriter == nil {
+		return 0
+	}
+	return e.historyWriter.PendingCount()
 }
 
 func (e *Engine) AppendOrderHistory(o *order.Order) {

@@ -1,4 +1,4 @@
-module github.com/viabtc/go-project/internal/kafka
+module github.com/teachain/exchange_server/internal/kafka
 
 go 1.25.0
 

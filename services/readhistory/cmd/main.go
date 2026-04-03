@@ -14,12 +14,12 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sys/unix"
 
-	"github.com/viabtc/go-project/internal/alert"
-	"github.com/viabtc/go-project/internal/utils"
-	rotatelog "github.com/viabtc/go-project/services/readhistory/internal/log"
-	"github.com/viabtc/go-project/services/readhistory/internal/reader"
-	"github.com/viabtc/go-project/services/readhistory/internal/server"
-	"github.com/viabtc/go-project/services/readhistory/internal/server/handler"
+	"github.com/teachain/exchange_server/internal/alert"
+	"github.com/teachain/exchange_server/internal/utils"
+	rotatelog "github.com/teachain/exchange_server/services/readhistory/internal/log"
+	"github.com/teachain/exchange_server/services/readhistory/internal/reader"
+	"github.com/teachain/exchange_server/services/readhistory/internal/server"
+	"github.com/teachain/exchange_server/services/readhistory/internal/server/handler"
 )
 
 func setFileLimit(max uint64) {

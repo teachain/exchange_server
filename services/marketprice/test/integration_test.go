@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/marketprice/internal/model"
-	"github.com/viabtc/go-project/services/marketprice/internal/server"
+	"github.com/teachain/exchange_server/services/marketprice/internal/model"
+	"github.com/teachain/exchange_server/services/marketprice/internal/server"
 )
 
 const (

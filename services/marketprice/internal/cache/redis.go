@@ -9,8 +9,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/shopspring/decimal"
-	"github.com/viabtc/go-project/services/marketprice/internal/kline"
-	"github.com/viabtc/go-project/services/marketprice/internal/model"
+	"github.com/teachain/exchange_server/services/marketprice/internal/kline"
+	"github.com/teachain/exchange_server/services/marketprice/internal/model"
 )
 
 type RedisCache struct {
