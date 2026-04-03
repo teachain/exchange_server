@@ -6,8 +6,53 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
+
+type Level int
+
+const (
+	DEBUG Level = iota
+	INFO
+	WARN
+	ERROR
+	FATAL
+)
+
+func (l Level) String() string {
+	switch l {
+	case DEBUG:
+		return "debug"
+	case INFO:
+		return "info"
+	case WARN:
+		return "warn"
+	case ERROR:
+		return "error"
+	case FATAL:
+		return "fatal"
+	default:
+		return "info"
+	}
+}
+
+func ParseLevel(s string) Level {
+	switch strings.ToLower(s) {
+	case "debug":
+		return DEBUG
+	case "info":
+		return INFO
+	case "warn":
+		return WARN
+	case "error":
+		return ERROR
+	case "fatal":
+		return FATAL
+	default:
+		return INFO
+	}
+}
 
 type RotateLogger struct {
 	mu         sync.Mutex
@@ -15,9 +60,10 @@ type RotateLogger struct {
 	logPath    string
 	maxSize    int64
 	maxBackups int
+	minLevel   Level
 }
 
-func NewRotateLogger(logPath string, maxSize int64, maxBackups int) (*RotateLogger, error) {
+func NewRotateLogger(logPath string, maxSize int64, maxBackups int, minLevel Level) (*RotateLogger, error) {
 	dir := filepath.Dir(logPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
@@ -33,6 +79,7 @@ func NewRotateLogger(logPath string, maxSize int64, maxBackups int) (*RotateLogg
 		logPath:    logPath,
 		maxSize:    maxSize,
 		maxBackups: maxBackups,
+		minLevel:   minLevel,
 	}
 
 	return rl, nil
@@ -44,6 +91,10 @@ func (rl *RotateLogger) Write(p []byte) (n int, err error) {
 
 	if rl.file == nil {
 		return 0, io.EOF
+	}
+
+	if !rl.shouldLog(p) {
+		return len(p), nil
 	}
 
 	info, err := rl.file.Stat()
@@ -58,6 +109,43 @@ func (rl *RotateLogger) Write(p []byte) (n int, err error) {
 	}
 
 	return rl.file.Write(p)
+}
+
+func (rl *RotateLogger) shouldLog(p []byte) bool {
+	if len(p) < 6 {
+		return true
+	}
+
+	for i := 0; i < len(p); i++ {
+		if p[i] == '[' {
+			end := i + 7
+			if end <= len(p) && p[end-1] == ']' {
+				levelStr := strings.ToLower(string(p[i+1 : end-1]))
+				switch levelStr {
+				case "debug":
+					return rl.minLevel <= DEBUG
+				case "info":
+					return rl.minLevel <= INFO
+				case "warn":
+					return rl.minLevel <= WARN
+				case "error":
+					return rl.minLevel <= ERROR
+				case "fatal":
+					return rl.minLevel <= FATAL
+				}
+			}
+		}
+		if p[i] == ' ' || p[i] == '\t' {
+			continue
+		}
+		break
+	}
+
+	return true
+}
+
+func (rl *RotateLogger) SetLevel(level Level) {
+	rl.minLevel = level
 }
 
 func (rl *RotateLogger) rotate() error {
@@ -192,6 +280,6 @@ type Logger interface {
 	Rotate() error
 }
 
-func NewLogger(logPath string) (*RotateLogger, error) {
-	return NewRotateLogger(logPath, 100*1024*1024, 10)
+func NewLogger(logPath string, minLevel Level) (*RotateLogger, error) {
+	return NewRotateLogger(logPath, 100*1024*1024, 10, minLevel)
 }

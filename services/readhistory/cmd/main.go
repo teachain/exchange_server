@@ -94,7 +94,7 @@ func main() {
 	srv := server.New(r)
 	srv.SetTimeout(30 * time.Second)
 
-	logger, err := rotatelog.NewLogger("readhistory.log")
+	logger, err := rotatelog.NewLogger("readhistory.log", rotatelog.ParseLevel(viper.GetString("log.level")))
 	if err != nil {
 		log.Fatal("failed to create logger:", err)
 	}
@@ -111,6 +111,13 @@ func main() {
 			log.Println("monitor server failed:", err)
 		}
 	}()
+
+	debug := viper.GetBool("debug")
+	if debug {
+		log.Printf("DEBUG MODE ENABLED")
+	}
+	srv.SetDebug(debug)
+	r.SetDebug(debug)
 
 	handler.RegisterBalanceHandlers(srv)
 	handler.RegisterOrderHandlers(srv)
