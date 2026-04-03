@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sys/unix"
 
+	"github.com/viabtc/go-project/internal/alert"
 	"github.com/viabtc/go-project/internal/utils"
 	"github.com/viabtc/go-project/services/accesshttp/internal/config"
 	"github.com/viabtc/go-project/services/accesshttp/internal/server"
@@ -48,6 +49,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	alerter, err := alert.NewAlerter(alert.AlertConfig{
+		Host: cfg.Alert.Host,
+		Port: cfg.Alert.Port,
+	})
+	if err != nil {
+		log.Printf("alert init failed: %v", err)
+	} else {
+		alerter.SendAlert("accesshttp started")
+	}
+	defer func() {
+		if alerter != nil {
+			alerter.Close()
+		}
+	}()
+
 	setFileLimit(1000000)
 	setCoreLimit(1000000000)
 
@@ -72,6 +88,9 @@ func main() {
 		log.Printf("Server listening on %s:%d", cfg.Server.Host, cfg.Server.Port)
 		if err := srv.Start(); err != nil {
 			log.Printf("Server error: %v", err)
+			if alerter != nil {
+				alerter.SendAlert("accesshttp server start failed: %v", err)
+			}
 		}
 	}()
 

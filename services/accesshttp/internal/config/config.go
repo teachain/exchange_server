@@ -12,6 +12,12 @@ type Config struct {
 	Workers int           `mapstructure:"workers"`
 	Backend BackendConfig `mapstructure:"backend"`
 	Timeout time.Duration `mapstructure:"timeout"`
+	Alert   AlertConfig   `mapstructure:"alert"`
+}
+
+type AlertConfig struct {
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
 }
 
 type ServerConfig struct {
