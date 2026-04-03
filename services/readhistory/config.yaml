@@ -12,3 +12,7 @@ database:
   max_idle: 50
 
 workers: 10
+
+alert:
+  host: "alertcenter"
+  port: 4444

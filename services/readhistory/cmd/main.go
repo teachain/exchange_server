@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/sys/unix"
 
+	"github.com/viabtc/go-project/internal/alert"
 	"github.com/viabtc/go-project/internal/utils"
 	rotatelog "github.com/viabtc/go-project/services/readhistory/internal/log"
 	"github.com/viabtc/go-project/services/readhistory/internal/reader"
@@ -58,6 +59,18 @@ func main() {
 		log.Fatal("load config failed:", err.Error())
 	}
 
+	alertCfg := alert.AlertConfig{
+		Host: viper.GetString("alert.host"),
+		Port: viper.GetInt("alert.port"),
+	}
+	alerter, err := alert.NewAlerter(alertCfg)
+	if err != nil {
+		log.Printf("alert init failed: %v", err)
+	} else {
+		alerter.SendAlert("readhistory started")
+	}
+	defer alerter.Close()
+
 	setFileLimit(1000000)
 	setCoreLimit(1000000000)
 
@@ -72,6 +85,7 @@ func main() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true", dbUser, dbPass, dbHost, dbPort, dbName)
 	db, err := sqlx.Connect("mysql", dsn)
 	if err != nil {
+		alerter.SendAlert("readhistory db connection failed: %v", err)
 		log.Fatal("failed to connect db:", err)
 	}
 	defer db.Close()
@@ -113,6 +127,7 @@ func main() {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	log.Println("Starting RPC server on", addr)
 	if err := srv.Start(addr); err != nil {
+		alerter.SendAlert("readhistory server start failed: %v", err)
 		log.Fatal("server failed:", err)
 	}
 

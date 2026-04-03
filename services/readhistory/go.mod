@@ -8,6 +8,9 @@ require (
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/shopspring/decimal v1.3.1
 	github.com/spf13/viper v1.18.2
+	github.com/viabtc/go-project v0.0.0-00010101000000-000000000000
+	github.com/viabtc/go-project/internal/alert v0.0.0-00010101000000-000000000000
+	golang.org/x/sys v0.41.0
 )
 
 require (
@@ -44,14 +47,12 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
-	github.com/viabtc/go-project v0.0.0-00010101000000-000000000000 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/arch v0.22.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/net v0.51.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
@@ -59,3 +60,5 @@ require (
 )
 
 replace github.com/viabtc/go-project => ../../
+
+replace github.com/viabtc/go-project/internal/alert => ../../internal/alert
