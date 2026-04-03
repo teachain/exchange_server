@@ -11,6 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/spf13/viper"
+	"github.com/viabtc/go-project/internal/alert"
 	"github.com/viabtc/go-project/internal/utils"
 	"github.com/viabtc/go-project/services/marketprice/internal/cache"
 	"github.com/viabtc/go-project/services/marketprice/internal/log"
@@ -49,6 +50,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	alertCfg := alert.AlertConfig{
+		Host: viper.GetString("alert.host"),
+		Port: viper.GetInt("alert.port"),
+	}
+	alerter, err := alert.NewAlerter(alertCfg)
+	if err != nil {
+		fmt.Println("alert init failed:", err.Error())
+	} else {
+		alerter.SendAlert("marketprice started")
+	}
+	defer alerter.Close()
+
 	setFileLimit(1000000)
 	setCoreLimit(1000000000)
 
@@ -80,6 +93,7 @@ func main() {
 
 	redisCache, err := cache.NewRedisCacheWithPassword(redisAddr, redisPassword, 0)
 	if err != nil {
+		alerter.SendAlert("redis connection failed: %v", err)
 		fmt.Println("create redis cache failed:", err.Error())
 		os.Exit(1)
 	}
@@ -117,7 +131,9 @@ func main() {
 	}()
 
 	logger.Write([]byte("server started\n"))
-	srv.Start(addr)
+	if err := srv.Start(addr); err != nil {
+		alerter.SendAlert("server start failed: %v", err)
+	}
 }
 
 func startFlushTimer(marketMgr *market.Manager, cache *cache.RedisCache) {
