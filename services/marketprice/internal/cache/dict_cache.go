@@ -3,6 +3,7 @@ package cache
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"log"
 	"sync"
 	"time"
 )
@@ -17,13 +18,15 @@ type DictCache struct {
 	entries  map[string]*CacheEntry
 	ttl      time.Duration
 	cleanupc chan struct{}
+	debug    bool
 }
 
-func NewDictCache(ttl time.Duration) *DictCache {
+func NewDictCache(ttl time.Duration, debug bool) *DictCache {
 	c := &DictCache{
 		entries:  make(map[string]*CacheEntry),
 		ttl:      ttl,
 		cleanupc: make(chan struct{}),
+		debug:    debug,
 	}
 	go c.cleanup()
 	return c
@@ -42,6 +45,9 @@ func (c *DictCache) Get(command uint32, body []byte) ([]byte, bool) {
 	c.mu.RUnlock()
 
 	if !ok {
+		if c.debug {
+			log.Printf("[DEBUG] cache MISS for command %d", command)
+		}
 		return nil, false
 	}
 
@@ -49,9 +55,15 @@ func (c *DictCache) Get(command uint32, body []byte) ([]byte, bool) {
 		c.mu.Lock()
 		delete(c.entries, key)
 		c.mu.Unlock()
+		if c.debug {
+			log.Printf("[DEBUG] cache EXPIRED for command %d", command)
+		}
 		return nil, false
 	}
 
+	if c.debug {
+		log.Printf("[DEBUG] cache HIT for command %d", command)
+	}
 	return entry.Value, true
 }
 

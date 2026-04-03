@@ -39,12 +39,12 @@ func New() *Server {
 	}
 }
 
-func NewWithCache(cacheTTL time.Duration) *Server {
+func NewWithCache(cacheTTL time.Duration, debug bool) *Server {
 	return &Server{
 		Router:    gin.Default(),
 		km:        kline.NewKlineManager(),
 		marketMgr: market.NewManager(),
-		cache:     cache.NewDictCache(cacheTTL),
+		cache:     cache.NewDictCache(cacheTTL, debug),
 	}
 }
 
@@ -471,7 +471,7 @@ func (s *Server) HandleMarketMonthKline(c *gin.Context) {
 	})
 }
 
-func (s *Server) StartConsumer(brokers []string, group string, topic string, redisAddr string, redisPassword string, partition int32) {
+func (s *Server) StartConsumer(brokers []string, group string, topic string, redisAddr string, redisPassword string, partition int32, debug bool) {
 	dealConsumer, err := consumer.NewDealConsumer(brokers, group, func(deal *consumer.Deal) {
 		price, _ := decimal.NewFromString(deal.Price)
 		amount, _ := decimal.NewFromString(deal.Amount)
@@ -483,7 +483,7 @@ func (s *Server) StartConsumer(brokers []string, group string, topic string, red
 			Amount: amount,
 			Side:   deal.Side,
 		})
-	}, redisAddr, redisPassword)
+	}, redisAddr, redisPassword, debug)
 
 	if err != nil {
 		panic("create deal consumer failed: " + err.Error())

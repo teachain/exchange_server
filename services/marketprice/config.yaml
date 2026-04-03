@@ -36,3 +36,5 @@ monitor:
 alert:
   host: "alertcenter"
   port: 4444
+
+debug: false

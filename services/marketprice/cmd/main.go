@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -14,7 +15,7 @@ import (
 	"github.com/viabtc/go-project/internal/alert"
 	"github.com/viabtc/go-project/internal/utils"
 	"github.com/viabtc/go-project/services/marketprice/internal/cache"
-	"github.com/viabtc/go-project/services/marketprice/internal/log"
+	appLog "github.com/viabtc/go-project/services/marketprice/internal/log"
 	"github.com/viabtc/go-project/services/marketprice/internal/market"
 	"github.com/viabtc/go-project/services/marketprice/internal/server"
 )
@@ -50,6 +51,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	debug := viper.GetBool("debug")
+	if debug {
+		log.Printf("DEBUG MODE ENABLED")
+	}
+
 	alertCfg := alert.AlertConfig{
 		Host: viper.GetString("alert.host"),
 		Port: viper.GetInt("alert.port"),
@@ -65,7 +71,7 @@ func main() {
 	setFileLimit(1000000)
 	setCoreLimit(1000000000)
 
-	logger, err := log.NewLogger(log.LoggerConfig{
+	logger, err := appLog.NewLogger(appLog.LoggerConfig{
 		Filename: viper.GetString("log.file"),
 		MaxSize:  int64(viper.GetInt("log.max_size")),
 		MaxFiles: viper.GetInt("log.max_files"),
@@ -102,13 +108,13 @@ func main() {
 	if cacheTimeout <= 0 {
 		cacheTimeout = 0.45
 	}
-	srv = server.NewWithCache(time.Duration(cacheTimeout * float64(time.Second)))
+	srv = server.NewWithCache(time.Duration(cacheTimeout*float64(time.Second)), debug)
 
-	go srv.StartConsumer(brokers, group, topic, redisAddr, redisPassword, partition)
+	go srv.StartConsumer(brokers, group, topic, redisAddr, redisPassword, partition, debug)
 
 	marketMgr := srv.GetMarketManager()
-	startFlushTimer(marketMgr, redisCache)
-	startClearTimer(marketMgr, 86400, 604800, 2592000)
+	startFlushTimer(debug, marketMgr, redisCache)
+	startClearTimer(debug, marketMgr, 86400, 604800, 2592000)
 
 	host := viper.GetString("server.host")
 	port := viper.GetInt("server.port")
@@ -136,19 +142,25 @@ func main() {
 	}
 }
 
-func startFlushTimer(marketMgr *market.Manager, cache *cache.RedisCache) {
+func startFlushTimer(debug bool, marketMgr *market.Manager, cache *cache.RedisCache) {
 	ticker := time.NewTicker(10 * time.Second)
 	go func() {
 		for range ticker.C {
+			if debug {
+				log.Printf("[DEBUG] flush timer triggered")
+			}
 			marketMgr.FlushDirty(cache)
 		}
 	}()
 }
 
-func startClearTimer(marketMgr *market.Manager, secMax, minMax, hourMax int64) {
+func startClearTimer(debug bool, marketMgr *market.Manager, secMax, minMax, hourMax int64) {
 	ticker := time.NewTicker(1 * time.Hour)
 	go func() {
 		for range ticker.C {
+			if debug {
+				log.Printf("[DEBUG] clear timer triggered")
+			}
 			marketMgr.ClearOldKlines(secMax, minMax, hourMax)
 		}
 	}()

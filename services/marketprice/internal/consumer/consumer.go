@@ -23,9 +23,10 @@ type DealConsumer struct {
 	reader  *kafka.Reader
 	handler func(*Deal)
 	redis   *redis.Client
+	debug   bool
 }
 
-func NewDealConsumer(brokers []string, group string, handler func(*Deal), redisAddr string, redisPassword string) (*DealConsumer, error) {
+func NewDealConsumer(brokers []string, group string, handler func(*Deal), redisAddr string, redisPassword string, debug bool) (*DealConsumer, error) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
 		Topic:          "deals",
@@ -46,6 +47,7 @@ func NewDealConsumer(brokers []string, group string, handler func(*Deal), redisA
 		reader:  reader,
 		handler: handler,
 		redis:   redisClient,
+		debug:   debug,
 	}, nil
 }
 
@@ -108,6 +110,9 @@ func (c *DealConsumer) Start(topic string, partition int32) error {
 			if err := json.Unmarshal(msg.Value, &deal); err != nil {
 				log.Printf("unmarshal deal failed: %v", err)
 				continue
+			}
+			if c.debug {
+				log.Printf("[DEBUG] kafka message processed: market=%s price=%s amount=%s", deal.Market, deal.Price, deal.Amount)
 			}
 			c.handler(&deal)
 			if err := c.SaveOffset(msg.Offset + 1); err != nil {
