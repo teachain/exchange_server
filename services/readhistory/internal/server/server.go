@@ -25,6 +25,7 @@ type Server struct {
 	mu           sync.RWMutex
 	router       *gin.Engine
 	timeout      time.Duration
+	debug        bool
 }
 
 func New(reader interface{}) *Server {
@@ -47,6 +48,14 @@ func timeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
 
 func (s *Server) SetTimeout(timeout time.Duration) {
 	s.timeout = timeout
+}
+
+func (s *Server) SetDebug(debug bool) {
+	s.debug = debug
+}
+
+func (s *Server) IsDebug() bool {
+	return s.debug
 }
 
 func (s *Server) Start(addr string) error {

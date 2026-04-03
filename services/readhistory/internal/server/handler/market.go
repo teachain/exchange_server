@@ -3,9 +3,17 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
+
 	"github.com/viabtc/go-project/services/readhistory/internal/reader"
 	"github.com/viabtc/go-project/services/readhistory/internal/server"
 )
+
+func logDebugMarket(s *server.Server, format string, v ...interface{}) {
+	if s.IsDebug() {
+		log.Printf("[DEBUG] "+format, v...)
+	}
+}
 
 const CMD_MARKET_USER_DEALS = 306
 
@@ -14,6 +22,8 @@ func RegisterMarketHandlers(s *server.Server) {
 }
 
 func HandleMarketUserDeals(s *server.Server, pkg *server.RPCPkg) ([]byte, error) {
+	logDebugMarket(s, "HandleMarketUserDeals called with body: %s", string(pkg.Body))
+
 	var params []interface{}
 	if err := json.Unmarshal(pkg.Body, &params); err != nil {
 		return nil, errors.New("invalid params")
@@ -43,8 +53,10 @@ func HandleMarketUserDeals(s *server.Server, pkg *server.RPCPkg) ([]byte, error)
 	r := s.GetReader().(*reader.Reader)
 	records, err := r.GetUserMarketDeals(userID, market, offset, limit)
 	if err != nil {
+		logDebugMarket(s, "HandleMarketUserDeals error: %v", err)
 		return nil, err
 	}
+	logDebugMarket(s, "HandleMarketUserDeals returned %d records", len(records))
 
 	result := map[string]interface{}{
 		"offset":  offset,

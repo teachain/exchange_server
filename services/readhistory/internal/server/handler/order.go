@@ -3,9 +3,17 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
+
 	"github.com/viabtc/go-project/services/readhistory/internal/reader"
 	"github.com/viabtc/go-project/services/readhistory/internal/server"
 )
+
+func logDebug(s *server.Server, format string, v ...interface{}) {
+	if s.IsDebug() {
+		log.Printf("[DEBUG] "+format, v...)
+	}
+}
 
 const (
 	CMD_ORDER_HISTORY         = 208
@@ -20,6 +28,8 @@ func RegisterOrderHandlers(s *server.Server) {
 }
 
 func HandleOrderHistory(s *server.Server, pkg *server.RPCPkg) ([]byte, error) {
+	logDebug(s, "HandleOrderHistory called with body: %s", string(pkg.Body))
+
 	var params []interface{}
 	if err := json.Unmarshal(pkg.Body, &params); err != nil {
 		return nil, errors.New("invalid params")
@@ -59,8 +69,10 @@ func HandleOrderHistory(s *server.Server, pkg *server.RPCPkg) ([]byte, error) {
 	r := s.GetReader().(*reader.Reader)
 	records, err := r.GetFinishedOrders(userID, market, side, startTime, endTime, offset, limit)
 	if err != nil {
+		logDebug(s, "HandleOrderHistory error: %v", err)
 		return nil, err
 	}
+	logDebug(s, "HandleOrderHistory returned %d records", len(records))
 
 	result := map[string]interface{}{
 		"offset":  offset,
@@ -72,6 +84,8 @@ func HandleOrderHistory(s *server.Server, pkg *server.RPCPkg) ([]byte, error) {
 }
 
 func HandleOrderDeals(s *server.Server, pkg *server.RPCPkg) ([]byte, error) {
+	logDebug(s, "HandleOrderDeals called with body: %s", string(pkg.Body))
+
 	var params []interface{}
 	if err := json.Unmarshal(pkg.Body, &params); err != nil {
 		return nil, errors.New("invalid params")
@@ -95,8 +109,10 @@ func HandleOrderDeals(s *server.Server, pkg *server.RPCPkg) ([]byte, error) {
 	r := s.GetReader().(*reader.Reader)
 	records, err := r.GetOrderDeals(orderID, offset, limit)
 	if err != nil {
+		logDebug(s, "HandleOrderDeals error: %v", err)
 		return nil, err
 	}
+	logDebug(s, "HandleOrderDeals returned %d records", len(records))
 
 	result := map[string]interface{}{
 		"offset":  offset,
@@ -108,6 +124,7 @@ func HandleOrderDeals(s *server.Server, pkg *server.RPCPkg) ([]byte, error) {
 }
 
 func HandleOrderDetailFinished(s *server.Server, pkg *server.RPCPkg) ([]byte, error) {
+	logDebug(s, "HandleOrderDetailFinished called with body: %s", string(pkg.Body))
 	var params []interface{}
 	if err := json.Unmarshal(pkg.Body, &params); err != nil {
 		return nil, errors.New("invalid params")
@@ -125,8 +142,10 @@ func HandleOrderDetailFinished(s *server.Server, pkg *server.RPCPkg) ([]byte, er
 	r := s.GetReader().(*reader.Reader)
 	detail, err := r.GetFinishedOrderDetail(orderID)
 	if err != nil {
+		logDebug(s, "HandleOrderDetailFinished error: %v", err)
 		return nil, err
 	}
+	logDebug(s, "HandleOrderDetailFinished returned detail: %v", detail != nil)
 
 	if detail == nil {
 		return []byte("null"), nil

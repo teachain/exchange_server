@@ -3,9 +3,17 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
+
 	"github.com/viabtc/go-project/services/readhistory/internal/reader"
 	"github.com/viabtc/go-project/services/readhistory/internal/server"
 )
+
+func logDebugBalance(s *server.Server, format string, v ...interface{}) {
+	if s.IsDebug() {
+		log.Printf("[DEBUG] "+format, v...)
+	}
+}
 
 const CMD_BALANCE_HISTORY = 103
 
@@ -14,6 +22,8 @@ func RegisterBalanceHandlers(s *server.Server) {
 }
 
 func HandleBalanceHistory(s *server.Server, pkg *server.RPCPkg) ([]byte, error) {
+	logDebugBalance(s, "HandleBalanceHistory called with body: %s", string(pkg.Body))
+
 	var params []interface{}
 	if err := json.Unmarshal(pkg.Body, &params); err != nil {
 		return nil, errors.New("invalid params")
@@ -50,8 +60,10 @@ func HandleBalanceHistory(s *server.Server, pkg *server.RPCPkg) ([]byte, error) 
 	r := s.GetReader().(*reader.Reader)
 	records, err := r.GetBalanceHistory(userID, asset, business, startTime, endTime, offset, limit)
 	if err != nil {
+		logDebugBalance(s, "HandleBalanceHistory error: %v", err)
 		return nil, err
 	}
+	logDebugBalance(s, "HandleBalanceHistory returned %d records", len(records))
 
 	result := map[string]interface{}{
 		"offset":  offset,
