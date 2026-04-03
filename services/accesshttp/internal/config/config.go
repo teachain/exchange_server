@@ -13,6 +13,11 @@ type Config struct {
 	Backend BackendConfig `mapstructure:"backend"`
 	Timeout time.Duration `mapstructure:"timeout"`
 	Alert   AlertConfig   `mapstructure:"alert"`
+	Log     LogConfig     `mapstructure:"log"`
+}
+
+type LogConfig struct {
+	Level string `mapstructure:"level"`
 }
 
 type AlertConfig struct {

@@ -118,6 +118,23 @@ func (l *Logger) SetLevel(level Level) {
 	l.level = level
 }
 
+func ParseLevel(s string) Level {
+	switch s {
+	case "debug":
+		return LevelDebug
+	case "info":
+		return LevelInfo
+	case "warn":
+		return LevelWarn
+	case "error":
+		return LevelError
+	case "fatal":
+		return LevelFatal
+	default:
+		return LevelInfo
+	}
+}
+
 func (l *Logger) levelString(level Level) string {
 	switch level {
 	case LevelDebug:

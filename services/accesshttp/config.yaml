@@ -15,3 +15,6 @@ monitor:
 alert:
   host: "alertcenter"
   port: 4444
+
+log:
+  level: "info"
