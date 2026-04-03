@@ -1,0 +1,59 @@
+server:
+  host: "0.0.0.0"
+  port: 7316
+
+alert:
+  host: "alertcenter"
+  port: 4444
+
+database:
+  host: "127.0.0.1"
+  port: 3306
+  name: "trade_log"
+  username: "root"
+  password: "qq851126"
+  max_open: 100
+  max_idle: 50
+
+redis:
+  host: "127.0.0.1"
+  port: 6379
+  password: "123456"
+  db: 0
+  pool_size: 100
+
+kafka:
+  brokers:
+    - "127.0.0.1:9092"
+  producer:
+    topic: "orders"
+  consumer:
+    group: "matchengine"
+    topic: "deals"
+    offset: "newest"
+
+markets:
+  - name: "BTC_USDT"
+    stock: "BTC"
+    money: "USDT"
+    stock_prec: 8
+    money_prec: 2
+    fee_prec: 8
+    min_amount: "0.0001"
+
+assets:
+  - name: "USDT"
+    prec: 16
+    prec_show: 8
+  - name: "SIPC"
+    prec: 16
+    prec_show: 8
+  - name: "BTC"
+    prec: 16
+    prec_show: 8
+  - name: "GTC"
+    prec: 16
+    prec_show: 8
+  - name: "BVIP"
+    prec: 16
+    prec_show: 8

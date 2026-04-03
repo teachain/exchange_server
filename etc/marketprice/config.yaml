@@ -1,0 +1,40 @@
+kafka:
+  brokers:
+    - "127.0.0.1:9092"
+  topic: "deals"
+  group_id: "marketprice"
+  partition: 0
+
+redis:
+  host: "127.0.0.1"
+  port: 6379
+  password: "redis123"
+  db: 0
+  sentinel:
+    enabled: false
+    master: "mymaster"
+    addrs: []
+
+cache:
+  sec_max: 86400      # 24 hours
+  min_max: 604800     # 7 days
+  hour_max: 2592000   # 30 days
+  timeout: 0.45       # response cache timeout in seconds
+
+server:
+  host: "0.0.0.0"
+  port: 7416
+
+log:
+  file: "marketprice.log"
+  max_size: 104857600
+  max_files: 10
+
+monitor:
+  port: 7417
+
+alert:
+  host: "alertcenter"
+  port: 4444
+
+debug: false

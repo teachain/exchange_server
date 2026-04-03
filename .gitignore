@@ -9,3 +9,5 @@ services/readhistory/readhistory
 services/readhistory/main
 
 *.log
+
+build
