@@ -3,19 +3,24 @@ package kline
 type Interval string
 
 const (
-	Interval1s  Interval = "1s"
-	Interval1m  Interval = "1m"
-	Interval5m  Interval = "5m"
-	Interval15m Interval = "15m"
-	Interval30m Interval = "30m"
-	Interval1h  Interval = "1h"
-	Interval2h  Interval = "2h"
-	Interval4h  Interval = "4h"
-	Interval6h  Interval = "6h"
-	Interval12h Interval = "12h"
-	Interval1d  Interval = "1d"
-	Interval1w  Interval = "1w"
-	Interval1M  Interval = "1M"
+	Interval1s    Interval = "1s"
+	Interval1m    Interval = "1m"
+	Interval5m    Interval = "5m"
+	Interval15m   Interval = "15m"
+	Interval30m   Interval = "30m"
+	Interval1h    Interval = "1h"
+	Interval2h    Interval = "2h"
+	Interval4h    Interval = "4h"
+	Interval6h    Interval = "6h"
+	Interval12h   Interval = "12h"
+	Interval1d    Interval = "1d"
+	IntervalWeek  Interval = "1w"
+	IntervalMonth Interval = "1M"
+)
+
+const (
+	Interval1w Interval = IntervalWeek
+	Interval1M Interval = IntervalMonth
 )
 
 func (i Interval) Seconds() int64 {
@@ -42,9 +47,9 @@ func (i Interval) Seconds() int64 {
 		return 43200
 	case Interval1d:
 		return 86400
-	case Interval1w:
+	case IntervalWeek:
 		return 604800
-	case Interval1M:
+	case IntervalMonth:
 		return 2592000
 	default:
 		return 60
@@ -59,7 +64,7 @@ func (i Interval) IsValid() bool {
 	switch i {
 	case Interval1s, Interval1m, Interval5m, Interval15m, Interval30m,
 		Interval1h, Interval2h, Interval4h, Interval6h, Interval12h,
-		Interval1d, Interval1w, Interval1M:
+		Interval1d, IntervalWeek, IntervalMonth:
 		return true
 	}
 	return false

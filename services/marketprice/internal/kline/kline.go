@@ -2,6 +2,7 @@ package kline
 
 import (
 	"sync"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -76,4 +77,92 @@ func (km *KlineManager) GetKline(market string, interval Interval, ts int64) *Kl
 		return nil
 	}
 	return km.current[market][interval]
+}
+
+func (km *KlineManager) GetWeekKline(market string, ts int64, loc *time.Location) *Kline {
+	km.mu.RLock()
+	defer km.mu.RUnlock()
+
+	if km.current[market] == nil {
+		return nil
+	}
+
+	if loc == nil {
+		loc = time.UTC
+	}
+
+	t := time.Unix(ts, 0).In(loc)
+	weekday := t.Weekday()
+	if weekday == time.Sunday {
+		weekday = 7
+	}
+	daysFromMonday := int(weekday) - 1
+	weekStart := time.Date(t.Year(), t.Month(), t.Day()-daysFromMonday, 0, 0, 0, 0, loc)
+	weekStartTs := weekStart.Unix()
+	weekEndTs := weekStartTs + 604800 - 1
+
+	return km.getAggregatedKline(market, IntervalWeek, weekStartTs, weekEndTs)
+}
+
+func (km *KlineManager) GetMonthKline(market string, ts int64, loc *time.Location) *Kline {
+	km.mu.RLock()
+	defer km.mu.RUnlock()
+
+	if km.current[market] == nil {
+		return nil
+	}
+
+	if loc == nil {
+		loc = time.UTC
+	}
+
+	t := time.Unix(ts, 0).In(loc)
+	monthStart := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, loc)
+	monthStartTs := monthStart.Unix()
+
+	nextMonth := monthStart.AddDate(0, 1, 0)
+	monthEnd := time.Date(nextMonth.Year(), nextMonth.Month(), 1, 0, 0, 0, 0, loc).Add(-1)
+	monthEndTs := monthEnd.Unix()
+
+	return km.getAggregatedKline(market, IntervalMonth, monthStartTs, monthEndTs)
+}
+
+func (km *KlineManager) getAggregatedKline(market string, interval Interval, startTs, endTs int64) *Kline {
+	var result Kline
+	first := true
+
+	for _, k := range km.current[market] {
+		if k.Interval != Interval1d && k.Interval != Interval1m && k.Interval != Interval5m &&
+			k.Interval != Interval15m && k.Interval != Interval30m && k.Interval != Interval1h &&
+			k.Interval != Interval2h && k.Interval != Interval4h && k.Interval != Interval6h &&
+			k.Interval != Interval12h && k.Interval != Interval1s {
+			continue
+		}
+
+		if k.Timestamp < startTs || k.Timestamp > endTs {
+			continue
+		}
+
+		if first {
+			result = *k
+			result.Interval = interval
+			result.Timestamp = startTs
+			first = false
+		} else {
+			if k.High.GreaterThan(result.High) {
+				result.High = k.High
+			}
+			if k.Low.LessThan(result.Low) {
+				result.Low = k.Low
+			}
+			result.Close = k.Close
+			result.Volume = result.Volume.Add(k.Volume)
+			result.DealAmount = result.DealAmount.Add(k.DealAmount)
+		}
+	}
+
+	if first {
+		return nil
+	}
+	return &result
 }

@@ -50,6 +50,8 @@ func (s *Server) SetupRoutes() {
 	s.Router.GET("/status_today/:market", s.HandleMarketStatusToday)
 	s.Router.GET("/markets", s.HandleMarketList)
 	s.Router.GET("/summary/:market", s.HandleMarketSummary)
+	s.Router.GET("/kline_week/:market", s.HandleMarketWeekKline)
+	s.Router.GET("/kline_month/:market", s.HandleMarketMonthKline)
 }
 
 func (s *Server) setupRoutes() {
@@ -311,6 +313,76 @@ func (s *Server) calculateMarketSummary(info *model.MarketInfo) gin.H {
 		"period":  86400,
 		"periods": []int64{60, 300, 900, 3600, 14400, 86400},
 	}
+}
+
+func (s *Server) HandleMarketWeekKline(c *gin.Context) {
+	marketName := c.Param("market")
+	tsStr := c.Query("ts")
+
+	var ts int64
+	if tsStr != "" {
+		var err error
+		ts, err = strconv.ParseInt(tsStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timestamp"})
+			return
+		}
+	} else {
+		ts = time.Now().Unix()
+	}
+
+	info, ok := s.marketMgr.Get(marketName)
+	if !ok {
+		c.JSON(404, gin.H{"error": "market not found"})
+		return
+	}
+
+	kline := s.km.GetWeekKline(marketName, ts, time.UTC)
+	if kline == nil {
+		c.JSON(404, gin.H{"error": "week kline not found"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"market":   info.Name,
+		"interval": "1w",
+		"kline":    kline,
+	})
+}
+
+func (s *Server) HandleMarketMonthKline(c *gin.Context) {
+	marketName := c.Param("market")
+	tsStr := c.Query("ts")
+
+	var ts int64
+	if tsStr != "" {
+		var err error
+		ts, err = strconv.ParseInt(tsStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timestamp"})
+			return
+		}
+	} else {
+		ts = time.Now().Unix()
+	}
+
+	info, ok := s.marketMgr.Get(marketName)
+	if !ok {
+		c.JSON(404, gin.H{"error": "market not found"})
+		return
+	}
+
+	kline := s.km.GetMonthKline(marketName, ts, time.UTC)
+	if kline == nil {
+		c.JSON(404, gin.H{"error": "month kline not found"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"market":   info.Name,
+		"interval": "1M",
+		"kline":    kline,
+	})
 }
 
 func (s *Server) StartConsumer(brokers []string, group string, topic string, redisAddr string, redisPassword string, partition int32) {
